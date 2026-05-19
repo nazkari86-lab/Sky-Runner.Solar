@@ -1,0 +1,3251 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Sky Runner Enhanced - 3D arcade flight game with particles, glow effects, combo popups, and multilingual UI." />
+  <meta name="theme-color" content="#6fa7d9" />
+  <title>Sky Runner — Enhanced Edition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,300;0,600;0,900;1,900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #ffd45a;
+      --gold-glow: rgba(255,212,90,0.45);
+      --blue-light: #8fd3ff;
+      --red-hit: #ff3a3a;
+      --shield-blue: #41d6ff;
+      --magnet-pink: #ff5c9a;
+      --slow-green: #7df56d;
+      --boost-orange: #ff9b33;
+      --bg-panel: rgba(6,14,26,0.92);
+      --border-subtle: rgba(255,255,255,0.14);
+      --border-active: rgba(255,212,90,0.5);
+      --font-hud: 'Share Tech Mono', monospace;
+      --font-ui: 'Exo 2', sans-serif;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html,body {
+      width:100%; height:100%;
+      overflow:hidden;
+      background:#000;
+      font-family: var(--font-ui);
+      color:#f8fbff;
+      touch-action:none;
+      user-select:none;
+    }
+    #world {
+      position:absolute; inset:0; overflow:hidden;
+      background:linear-gradient(to bottom,#07111f,#0b2a40);
+    }
+
+    /* ── HUD ── */
+    #hud {
+      position:absolute; top:0; left:0; width:100%; z-index:10;
+      padding:12px 14px;
+      display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
+      pointer-events:none;
+      font-family:var(--font-hud);
+    }
+    #stats { display:flex; gap:7px; flex-wrap:wrap; }
+    .badge {
+      pointer-events:none;
+      background:linear-gradient(135deg,rgba(8,18,34,0.82),rgba(4,10,20,0.68));
+      border:1px solid var(--border-subtle);
+      border-radius:6px;
+      padding:7px 11px;
+      backdrop-filter:blur(14px);
+      font-weight:600;
+      font-size:13px;
+      box-shadow:0 8px 24px rgba(0,0,0,0.28);
+      min-height:34px;
+      transition:border-color 0.3s;
+    }
+    .badge strong { color:var(--gold); }
+    .badge.small { font-size:12px; padding:6px 9px; }
+    .badge.glow { border-color:var(--gold-glow); box-shadow:0 0 16px var(--gold-glow), 0 8px 24px rgba(0,0,0,0.28); }
+    .badge.shield-glow { border-color:rgba(65,214,255,0.5); box-shadow:0 0 16px rgba(65,214,255,0.3); }
+    .badge.magnet-glow { border-color:rgba(255,92,154,0.5); box-shadow:0 0 16px rgba(255,92,154,0.3); }
+    .badge.slow-glow { border-color:rgba(125,245,109,0.5); box-shadow:0 0 16px rgba(125,245,109,0.3); }
+    .badge.boost-glow { border-color:rgba(255,155,51,0.5); box-shadow:0 0 16px rgba(255,155,51,0.3); }
+
+    #help {
+      max-width:380px; font-size:12px; line-height:1.4; opacity:0.88; text-align:right;
+      background:rgba(6,14,26,0.44); border:1px solid rgba(255,255,255,0.1);
+      border-radius:6px; padding:7px 10px; backdrop-filter:blur(8px);
+      font-family:var(--font-hud);
+    }
+
+    /* ── Score popups ── */
+    #scorePopupContainer {
+      position:absolute; inset:0; pointer-events:none; z-index:18; overflow:hidden;
+    }
+    .score-popup {
+      position:absolute;
+      font-family:var(--font-hud);
+      font-size:22px;
+      font-weight:900;
+      color:#fff;
+      text-shadow:0 0 18px var(--gold), 0 2px 8px rgba(0,0,0,0.6);
+      pointer-events:none;
+      animation:popupFly 0.9s ease-out forwards;
+    }
+    @keyframes popupFly {
+      0%   { transform:translateY(0) scale(1);   opacity:1; }
+      60%  { transform:translateY(-45px) scale(1.1); opacity:1; }
+      100% { transform:translateY(-85px) scale(0.85); opacity:0; }
+    }
+    .score-popup.combo { color:var(--gold); font-size:28px; text-shadow:0 0 24px var(--gold); }
+    .score-popup.shield { color:var(--shield-blue); text-shadow:0 0 18px var(--shield-blue); }
+    .score-popup.magnet { color:var(--magnet-pink); text-shadow:0 0 18px var(--magnet-pink); }
+    .score-popup.slow { color:var(--slow-green); text-shadow:0 0 18px var(--slow-green); }
+    .score-popup.boost { color:var(--boost-orange); text-shadow:0 0 18px var(--boost-orange); }
+
+    /* ── Danger indicator ── */
+    #dangerRing {
+      position:absolute; inset:0; pointer-events:none; z-index:9;
+      border-radius:0;
+      box-shadow:inset 0 0 0 0 rgba(255,58,58,0);
+      transition:box-shadow 0.12s;
+    }
+    #dangerRing.near { box-shadow:inset 0 0 60px 20px rgba(255,58,58,0.22); animation:dangerPulse 0.55s ease-in-out infinite; }
+    #dangerRing.critical { box-shadow:inset 0 0 80px 30px rgba(255,58,58,0.45); animation:dangerPulse 0.28s ease-in-out infinite; }
+    @keyframes dangerPulse {
+      0%,100% { opacity:1; } 50% { opacity:0.35; }
+    }
+
+    /* ── Controls ── */
+    #topControls {
+      position:absolute; right:14px; bottom:14px;
+      display:flex; gap:8px; z-index:15;
+    }
+    .icon-button {
+      width:44px; height:44px; min-width:44px; padding:0; border-radius:8px;
+      display:inline-flex; align-items:center; justify-content:center;
+      font-size:17px; line-height:1; text-transform:none; letter-spacing:0;
+      background:rgba(6,14,26,0.72); color:#fff;
+      border:1px solid rgba(255,255,255,0.16);
+      box-shadow:0 8px 24px rgba(0,0,0,0.22);
+      cursor:pointer; transition:transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .icon-button:hover { transform:translateY(-2px); border-color:rgba(255,255,255,0.32); box-shadow:0 12px 32px rgba(0,0,0,0.3); }
+
+    /* ── Flash & overlays ── */
+    #flash {
+      position:absolute; inset:0;
+      background:radial-gradient(circle, rgba(255,58,58,0.55), rgba(255,58,58,0));
+      opacity:0; pointer-events:none; z-index:8;
+    }
+    #shieldFlash {
+      position:absolute; inset:0;
+      background:radial-gradient(circle, rgba(65,214,255,0.38), rgba(65,214,255,0));
+      opacity:0; pointer-events:none; z-index:8; transition:opacity 0.2s;
+    }
+
+    .overlay {
+      position:absolute; inset:0; display:flex;
+      align-items:center; justify-content:center;
+      z-index:20; padding:16px;
+      background:rgba(2,5,12,0.7);
+      pointer-events:auto;
+      transition:opacity 0.3s;
+    }
+    .overlay.hidden, #modal.hidden, #menuOverlay.hidden { display:none; }
+
+    .panel {
+      width:min(94vw,520px);
+      max-height:min(92vh,760px);
+      overflow:auto;
+      background:var(--bg-panel);
+      color:white;
+      border:1px solid var(--border-subtle);
+      border-radius:10px;
+      padding:24px;
+      text-align:center;
+      box-shadow:0 30px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.07);
+      backdrop-filter:blur(24px) saturate(1.2);
+    }
+    .release-panel {
+      width:min(94vw,780px); text-align:left;
+    }
+
+    /* ── Typography ── */
+    .panel h1 {
+      font-family:var(--font-ui);
+      font-size:clamp(36px,7vw,68px);
+      font-weight:900; font-style:italic;
+      line-height:0.9; margin-bottom:10px;
+      letter-spacing:-2px;
+      background:linear-gradient(135deg,#fff 30%,var(--gold) 70%);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+      background-clip:text;
+    }
+    .panel h2 {
+      font-family:var(--font-ui);
+      font-size:20px; margin:0 0 12px;
+      color:var(--gold); font-weight:600;
+      letter-spacing:0.5px;
+    }
+    .panel p {
+      font-size:15px; line-height:1.55; opacity:0.88; margin-bottom:16px;
+    }
+
+    .menu-grid {
+      display:grid; grid-template-columns:1.1fr 0.9fr; gap:14px; margin-top:16px;
+    }
+    .menu-section {
+      border:1px solid rgba(255,255,255,0.11); border-radius:8px;
+      padding:14px; background:rgba(255,255,255,0.04);
+    }
+    .menu-actions, .modal-actions {
+      display:flex; gap:9px; flex-wrap:wrap; justify-content:center; margin-top:16px;
+    }
+    .release-panel .menu-actions { justify-content:flex-start; }
+
+    .stat-line, .setting-row, .leaderboard-row {
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px; padding:8px 0;
+      border-bottom:1px solid rgba(255,255,255,0.07);
+      font-size:14px;
+    }
+    .leaderboard-status {
+      display:inline-flex; align-items:center; gap:7px; margin-bottom:9px;
+      padding:6px 8px; border-radius:6px;
+      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+      color:rgba(255,255,255,0.82); font-size:11px; font-weight:700;
+      font-family:var(--font-hud);
+    }
+    .leaderboard-status::before {
+      content:""; width:7px; height:7px; border-radius:50%;
+      background:#ffbf4d; box-shadow:0 0 10px rgba(255,191,77,0.7);
+    }
+    .leaderboard-status.online::before { background:#58f29a; box-shadow:0 0 10px rgba(88,242,154,0.7); }
+    .leaderboard-status.offline::before { background:#ff6b57; box-shadow:0 0 10px rgba(255,107,87,0.7); }
+    .leaderboard-table {
+      width:100%; border-collapse:collapse; font-size:12px; font-family:var(--font-hud);
+    }
+    .leaderboard-table th, .leaderboard-table td {
+      padding:7px 5px; border-bottom:1px solid rgba(255,255,255,0.07);
+      text-align:right; white-space:nowrap;
+    }
+    .leaderboard-table th:first-child, .leaderboard-table td:first-child {
+      text-align:left; white-space:normal; min-width:100px;
+    }
+    .leaderboard-table th { color:var(--gold); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+    .leaderboard-table tr:last-child td { border-bottom:0; }
+    .leaderboard-row:last-child, .stat-line:last-child, .setting-row:last-child { border-bottom:0; }
+    .setting-row label { font-weight:700; }
+    .setting-copy { display:grid; gap:2px; min-width:0; }
+    .setting-copy small { color:rgba(255,255,255,0.6); font-size:11px; line-height:1.3; }
+
+    select, input[type="text"] {
+      min-width:140px; max-width:200px; border-radius:7px;
+      border:1px solid rgba(255,255,255,0.2);
+      background:rgba(0,0,0,0.32); color:#fff;
+      padding:9px 11px; font:inherit; font-size:13px;
+    }
+    input[type="checkbox"] { width:18px; height:18px; accent-color:var(--gold); }
+
+    button {
+      pointer-events:auto; border:0; border-radius:8px;
+      padding:12px 17px; font-weight:800; font-size:15px;
+      background:var(--gold); color:#06111f;
+      cursor:pointer;
+      transition:transform 0.15s, box-shadow 0.15s, background 0.15s;
+      text-transform:uppercase; letter-spacing:0.5px;
+      box-shadow:0 10px 26px rgba(0,0,0,0.28);
+      min-height:44px; white-space:normal;
+      font-family:var(--font-ui);
+    }
+    button.secondary {
+      background:rgba(255,255,255,0.07); color:#fff;
+      border:1px solid rgba(255,255,255,0.16);
+    }
+    button.danger { background:#ff6b57; color:#fff; }
+    button:hover, button:focus-visible {
+      transform:translateY(-2px);
+      box-shadow:0 14px 34px rgba(0,0,0,0.35);
+      outline:none;
+    }
+    button.secondary:hover { background:rgba(255,255,255,0.12); }
+
+    /* ── Achievement popup ── */
+    #achievementPopup {
+      position:absolute; top:72px; left:50%;
+      transform:translate(-50%,-20px);
+      z-index:25; min-width:min(88vw,340px); max-width:400px;
+      padding:13px 15px; border-radius:8px;
+      background:rgba(5,13,26,0.94);
+      border:1px solid rgba(255,212,90,0.5);
+      box-shadow:0 16px 48px rgba(0,0,0,0.42), 0 0 24px rgba(255,212,90,0.2);
+      opacity:0; pointer-events:none;
+      transition:opacity 0.28s ease, transform 0.28s ease;
+      text-align:center;
+    }
+    #achievementPopup.show { opacity:1; transform:translate(-50%,0); }
+    #achievementTitle { font-weight:900; color:var(--gold); margin-bottom:4px; font-family:var(--font-ui); }
+    #achievementDesc { font-size:13px; opacity:0.88; font-family:var(--font-hud); }
+
+    /* ── Mobile controls ── */
+    #mobileControls {
+      position:absolute; left:12px; bottom:12px; z-index:14;
+      display:none;
+      grid-template-columns:repeat(3,52px);
+      grid-template-rows:repeat(2,52px);
+      gap:7px; opacity:0.9;
+    }
+    .touch-btn {
+      min-width:52px; width:52px; height:52px; padding:0; border-radius:8px;
+      background:rgba(6,14,26,0.68); color:#fff;
+      border:1px solid rgba(255,255,255,0.18); font-size:22px; text-transform:none;
+    }
+    .touch-btn[data-key="arrowup"]    { grid-column:2; grid-row:1; }
+    .touch-btn[data-key="arrowleft"]  { grid-column:1; grid-row:2; }
+    .touch-btn[data-key="arrowdown"]  { grid-column:2; grid-row:2; }
+    .touch-btn[data-key="arrowright"] { grid-column:3; grid-row:2; }
+    .touch-btn.shoot-btn {
+      grid-column:4; grid-row:2;
+      background:rgba(255,212,90,0.82); color:#06111f;
+      border-color:rgba(255,255,255,0.42);
+      box-shadow:0 0 18px rgba(255,212,90,0.32);
+      font-size:18px;
+    }
+    .touch-btn.shoot-btn.cooling { opacity:0.45; filter:saturate(0.55); }
+
+    /* ── Error ── */
+    #threeError {
+      position:absolute; inset:0; z-index:100;
+      display:none; align-items:center; justify-content:center;
+      padding:20px; background:#06111f; color:#fff; text-align:center;
+    }
+    #threeError.show { display:flex; }
+
+    /* ── State classes ── */
+    .is-menu #hud, .is-menu #mobileControls, .is-menu #pauseBtn, .is-menu #missionTracker, .is-menu #bossHud { display:none; }
+    .is-paused #missionTracker, .is-gameover #missionTracker { display:none; }
+    .is-playing #menuOverlay, .is-paused #menuOverlay, .is-gameover #menuOverlay { display:none; }
+
+    /* ── Combo streak bar ── */
+    #comboBar {
+      position:absolute; bottom:0; left:0; height:3px;
+      background:linear-gradient(90deg, var(--gold), #fff);
+      width:0%; z-index:12; pointer-events:none;
+      transition:width 0.12s linear, opacity 0.3s;
+      box-shadow:0 0 12px var(--gold);
+      opacity:0;
+    }
+    #comboBar.active { opacity:1; }
+
+    #speedLines {
+      position:absolute; inset:0; z-index:7; pointer-events:none; opacity:0;
+      background:
+        repeating-linear-gradient(90deg, transparent 0 48px, rgba(255,255,255,0.16) 49px 50px, transparent 51px 120px),
+        radial-gradient(circle at center, transparent 0 25%, rgba(255,255,255,0.18) 55%, transparent 80%);
+      mix-blend-mode:screen;
+      transition:opacity 0.18s;
+    }
+    #speedLines.show { opacity:0.75; animation:speedLines 0.42s ease-out forwards; }
+    @keyframes speedLines {
+      0% { transform:scaleX(0.85); opacity:0.8; }
+      100% { transform:scaleX(1.18); opacity:0; }
+    }
+    #bulletTimeTint {
+      position:absolute; inset:0; z-index:8; pointer-events:none; opacity:0;
+      background:radial-gradient(circle, rgba(140,220,255,0.08), rgba(40,120,255,0.2));
+      transition:opacity 0.25s;
+    }
+    #bulletTimeTint.show { opacity:1; }
+    body.shake #world { animation:screenShake 0.28s linear; }
+    @keyframes screenShake {
+      0%,100% { transform:translate(0,0); }
+      20% { transform:translate(-5px,2px); }
+      40% { transform:translate(4px,-2px); }
+      60% { transform:translate(-3px,-3px); }
+      80% { transform:translate(3px,2px); }
+    }
+
+    #missionTracker {
+      position:absolute; left:14px; top:76px; z-index:13;
+      width:min(330px,calc(100vw - 28px));
+      display:grid; gap:6px; pointer-events:none;
+      font-family:var(--font-hud);
+    }
+    .mission-row {
+      background:rgba(5,13,26,0.64);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:7px; padding:7px 8px;
+      backdrop-filter:blur(10px);
+      box-shadow:0 8px 24px rgba(0,0,0,0.18);
+    }
+    .mission-row.done { border-color:rgba(255,212,90,0.5); background:rgba(255,212,90,0.12); }
+    .mission-row .top { display:flex; justify-content:space-between; gap:8px; font-size:11px; color:#e8f2ff; }
+    .mission-row .bar { height:3px; margin-top:5px; border-radius:999px; overflow:hidden; background:rgba(255,255,255,0.12); }
+    .mission-row .bar span { display:block; height:100%; background:linear-gradient(90deg,var(--gold),#fff); width:0%; box-shadow:0 0 10px var(--gold); }
+
+    #bossHud {
+      position:absolute; top:68px; left:50%; transform:translateX(-50%);
+      z-index:14; width:min(520px,82vw); display:none;
+      font-family:var(--font-hud); pointer-events:none;
+    }
+    #bossHud .label {
+      display:flex; justify-content:space-between; margin-bottom:5px;
+      font-size:12px; color:#ffdede; text-shadow:0 0 12px rgba(255,80,80,0.7);
+    }
+    #bossHud .track {
+      height:9px; border-radius:999px; overflow:hidden;
+      background:rgba(30,0,0,0.75); border:1px solid rgba(255,100,100,0.45);
+      box-shadow:0 0 22px rgba(255,64,64,0.25);
+    }
+    #bossHealthFill { height:100%; width:100%; background:linear-gradient(90deg,#ff3b3b,#ffb347); }
+
+    .shop-grid {
+      display:grid; grid-template-columns:1fr; gap:8px; max-height:360px; overflow:auto; padding-right:2px;
+    }
+    .shop-card {
+      display:grid; grid-template-columns:auto 1fr auto; gap:9px; align-items:center;
+      padding:9px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);
+      background:rgba(255,255,255,0.04); text-align:left;
+    }
+    .shop-card .ico { font-size:21px; width:28px; text-align:center; }
+    .shop-card .name { font-weight:800; font-size:13px; }
+    .shop-card .desc { font-size:11px; color:rgba(255,255,255,0.64); margin-top:2px; }
+    .shop-card button { min-height:34px; padding:8px 10px; font-size:12px; border-radius:7px; }
+    .shop-card button:disabled { opacity:0.45; cursor:not-allowed; transform:none; }
+
+    /* ── Stage transition flash ── */
+    #stageFlash {
+      position:absolute; inset:0; pointer-events:none; z-index:11;
+      opacity:0;
+    }
+    #stageFlash.show { animation:stageTransition 1.2s ease-out forwards; }
+    @keyframes stageTransition {
+      0%   { opacity:0.8; } 100% { opacity:0; }
+    }
+
+    /* ── Utilities ── */
+    .hidden { display:none !important; }
+    .sr-only {
+      position:absolute; width:1px; height:1px; padding:0;
+      margin:-1px; overflow:hidden; clip:rect(0,0,0,0);
+      white-space:nowrap; border:0;
+    }
+
+    @media (max-width:700px) {
+      #hud { flex-direction:column; align-items:flex-start; padding:8px; gap:6px; }
+      #stats { gap:5px; }
+      .badge { font-size:11px; padding:6px 7px; min-height:28px; }
+      #help { text-align:left; max-width:none; font-size:11px; padding:6px 7px; }
+      .panel h1 { font-size:32px; }
+      .panel { padding:16px; }
+      .menu-grid { grid-template-columns:1fr; }
+      .setting-row { align-items:flex-start; flex-direction:column; }
+      select, input[type="text"] { width:100%; max-width:none; }
+      #topControls { right:8px; bottom:8px; }
+      #mobileControls { display:grid; grid-template-columns:repeat(4,52px); }
+      #missionTracker { top:auto; bottom:122px; left:8px; width:min(310px,calc(100vw - 16px)); }
+      #bossHud { top:104px; width:90vw; }
+    }
+  </style>
+</head>
+<body class="is-menu">
+  <div id="world"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="stats">
+      <div class="badge"><span id="scoreLabel">Score</span>: <strong id="score">0</strong></div>
+      <div class="badge"><span id="bestLabel">Best</span>: <strong id="bestScore">0</strong></div>
+      <div class="badge"><span id="livesLabel">Lives</span>: <span id="lives">❤❤❤</span></div>
+      <div class="badge"><span id="coinsLabel">Coins</span>: <strong id="coins">0</strong></div>
+      <div class="badge"><span id="comboLabel">Combo</span>: <strong id="combo">0</strong></div>
+      <div class="badge"><span id="speedLabel">Speed</span>: <strong id="speed">1.0x</strong></div>
+      <div class="badge"><span id="stageLabel">Stage</span>: <strong id="stageName">Sunny</strong></div>
+      <div class="badge small" id="powerupBadge" style="display:none"><span id="powerupLabel">Powerup</span>: <strong id="powerupText"></strong></div>
+      <div class="badge small" id="cityBadge" style="display:none"><span id="cityPrefix">Flying over</span>: <strong id="cityName">Tokyo</strong></div>
+    </div>
+    <div id="help"></div>
+  </div>
+
+  <!-- Combo progress bar -->
+  <div id="comboBar"></div>
+  <div id="speedLines"></div>
+  <div id="bulletTimeTint"></div>
+  <div id="missionTracker"></div>
+  <div id="bossHud">
+    <div class="label"><span id="bossName">BOSS</span><span id="bossHealthText">100%</span></div>
+    <div class="track"><div id="bossHealthFill"></div></div>
+  </div>
+
+  <!-- Stage transition flash -->
+  <div id="stageFlash"></div>
+
+  <!-- Score popup container -->
+  <div id="scorePopupContainer"></div>
+
+  <!-- Controls -->
+  <div id="topControls">
+    <button id="pauseBtn" class="icon-button" type="button" aria-label="Pause" title="Pause">⏸</button>
+    <button id="muteBtn" class="icon-button" type="button" aria-label="Mute" title="Mute">♪</button>
+    <button id="fullscreenBtn" class="icon-button" type="button" aria-label="Fullscreen" title="Fullscreen">⛶</button>
+  </div>
+
+  <!-- Mobile D-pad -->
+  <div id="mobileControls" aria-hidden="true">
+    <button class="touch-btn" type="button" data-key="arrowup">↑</button>
+    <button class="touch-btn" type="button" data-key="arrowleft">←</button>
+    <button class="touch-btn" type="button" data-key="arrowdown">↓</button>
+    <button class="touch-btn" type="button" data-key="arrowright">→</button>
+    <button class="touch-btn shoot-btn" id="shootTouchBtn" type="button" data-key="shoot">●</button>
+  </div>
+
+  <!-- Hit flashes -->
+  <div id="flash"></div>
+  <div id="shieldFlash"></div>
+  <div id="dangerRing"></div>
+
+  <!-- Main menu -->
+  <div id="menuOverlay" class="overlay">
+    <div class="panel release-panel">
+      <h1>Sky Runner</h1>
+      <p id="menuSubtitle"></p>
+      <div class="menu-actions">
+        <button id="startBtn" type="button"></button>
+        <button id="leaderboardBtn" class="secondary" type="button"></button>
+        <button id="shopBtn" class="secondary" type="button"></button>
+        <button id="settingsBtn" class="secondary" type="button"></button>
+      </div>
+      <div class="menu-grid">
+        <section class="menu-section" id="mainMenuPanel">
+          <h2 id="overviewTitle"></h2>
+          <div class="stat-line"><span id="menuBestLabel"></span><strong id="menuBestScore">0</strong></div>
+          <div class="stat-line"><span id="menuGamesLabel"></span><strong id="menuGamesPlayed">0</strong></div>
+          <div class="stat-line"><span id="menuAchievementsLabel"></span><strong id="menuAchievementCount">0/0</strong></div>
+          <p id="menuControlsText" style="margin-top:10px;margin-bottom:0;font-size:12px;opacity:0.75"></p>
+        </section>
+        <section class="menu-section" id="sidePanel">
+          <h2 id="sidePanelTitle"></h2>
+          <div id="leaderboardList"></div>
+          <div id="shopPanel" class="hidden">
+            <div class="stat-line"><span id="balanceLabel"></span><strong>★ <span id="shopCoins">0</span></strong></div>
+            <div id="shopGrid" class="shop-grid"></div>
+          </div>
+          <div id="settingsPanel" class="hidden">
+            <div class="setting-row">
+              <label for="languageSelect" id="languageLabel"></label>
+              <select id="languageSelect">
+                <option value="ru">Русский</option>
+                <option value="kk">Қазақша</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label for="playerNameInput" id="playerNameLabel"></label>
+              <input id="playerNameInput" type="text" maxlength="16" autocomplete="off" />
+            </div>
+            <div class="setting-row">
+              <label for="graphicsSelect" id="graphicsLabel"></label>
+              <select id="graphicsSelect">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label for="controlSelect" id="controlLabel"></label>
+              <select id="controlSelect">
+                <option value="hybrid">Hybrid</option>
+                <option value="pointer">Pointer</option>
+                <option value="keyboard">Keyboard</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label for="soundToggle" id="soundLabel"></label>
+              <input id="soundToggle" type="checkbox" />
+            </div>
+            <div class="setting-row">
+              <label for="motionToggle" id="motionLabel"></label>
+              <input id="motionToggle" type="checkbox" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-copy">
+                <label for="immortalToggle" id="immortalLabel"></label>
+                <small id="immortalNote"></small>
+              </div>
+              <input id="immortalToggle" type="checkbox" />
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game over / pause modal -->
+  <div id="modal" class="overlay hidden">
+    <div class="panel">
+      <h1 id="modalTitle">Game Over</h1>
+      <p id="modalText">Stay airborne longer!</p>
+      <div id="runSummary" class="stat-line" style="display:none">
+        <span id="runSummaryLabel"></span><strong id="runSummaryScore"></strong>
+      </div>
+      <div id="runDetails" style="display:none;margin-top:8px;font-size:12px;opacity:0.7;font-family:var(--font-hud)"></div>
+      <div class="modal-actions">
+        <button id="resumeBtn" class="secondary" type="button" style="display:none"></button>
+        <button id="reviveBtn" class="danger" type="button" style="display:none"></button>
+        <button id="restartBtn" type="button"></button>
+        <button id="menuBtn" class="secondary" type="button"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Achievement popup -->
+  <div id="achievementPopup">
+    <div id="achievementTitle"></div>
+    <div id="achievementDesc"></div>
+  </div>
+
+  <!-- Three.js load error -->
+  <div id="threeError">
+    <div class="panel">
+      <h1>Sky Runner</h1>
+      <p id="threeErrorText">Three.js could not be loaded.</p>
+      <button id="reloadBtn" type="button">Reload</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="window.__threeLoadFailed=true"></script>
+  <script>
+  // ═══════════════════════════════════════════
+  // STORAGE & SETTINGS
+  // ═══════════════════════════════════════════
+  var STORAGE_KEYS = {
+    settings:"skyRunnerE.settings",
+    highScores:"skyRunnerE.highScores",
+    achievements:"skyRunnerE.achievements",
+    stats:"skyRunnerE.stats",
+    upgrades:"skyRunnerE.upgrades",
+    coins:"skyRunnerE.coins",
+    clientId:"skyRunnerE.clientId",
+    lastScoreSync:"skyRunnerE.lastScoreSync"
+  };
+  var GLOBAL_LEADERBOARD_ENDPOINT = "https://mantledb.sh/v2/sky-runner-gold/leaderboard";
+  var LOCAL_SCORE_LIMIT = 100;
+  var GLOBAL_SCORE_LIMIT = 250;
+  var GLOBAL_SYNC_COOLDOWN_MS = 3500;
+  var SCORE_LIMITS = { score:5000000, combo:2000, rings:10000, distance:50000000, runTime:14400, coins:999999 };
+  var defaultSettings = { language:"ru", playerName:"Pilot", graphics:"high", controls:"hybrid", sound:true, reducedMotion:false, immortalMode:false };
+  var defaultStats = { gamesPlayed:0, totalScore:0, totalRings:0, totalDistance:0, bestCombo:0, totalRevives:0, totalCoins:0, totalPowerups:0, bossesDefeated:0 };
+  var defaultUpgrades = { shield:0, magnet:0, coin:0, lives:0, combo:0, power:0, score:0 };
+  var UPGRADE_MAX=5;
+  var UPGRADE_COSTS=[25,60,140,320,700];
+  function upgradeCost(level){ return UPGRADE_COSTS[level]||99999; }
+
+  function loadJSON(key,fb){ try{ var r=localStorage.getItem(key); return r?JSON.parse(r):fb; }catch(e){ return fb; } }
+  function saveJSON(key,val){ try{ localStorage.setItem(key,JSON.stringify(val)); }catch(e){} }
+  function mergeObject(base,saved){
+    var out={}; Object.keys(base).forEach(function(k){ out[k]=base[k]; });
+    if(saved) Object.keys(saved).forEach(function(k){ if(k in out) out[k]=saved[k]; });
+    return out;
+  }
+  function normalizeSettings(saved){
+    var n=mergeObject(defaultSettings,saved);
+    if(["ru","kk","en"].indexOf(n.language)===-1) n.language=defaultSettings.language;
+    if(["low","medium","high"].indexOf(n.graphics)===-1) n.graphics=defaultSettings.graphics;
+    if(["hybrid","pointer","keyboard"].indexOf(n.controls)===-1) n.controls=defaultSettings.controls;
+    n.playerName=normalizePlayerName(n.playerName||defaultSettings.playerName);
+    n.sound=n.sound!==false; n.reducedMotion=n.reducedMotion===true; n.immortalMode=n.immortalMode===true;
+    return n;
+  }
+  function normalizeStats(saved){
+    var n=mergeObject(defaultStats,saved);
+    Object.keys(defaultStats).forEach(function(k){ n[k]=Math.max(0,Math.round(Number(n[k])||0)); });
+    return n;
+  }
+  function normalizeUpgrades(saved){
+    var n=mergeObject(defaultUpgrades,saved);
+    Object.keys(defaultUpgrades).forEach(function(k){ n[k]=clamp(Math.round(Number(n[k])||0),0,UPGRADE_MAX); });
+    return n;
+  }
+
+  var settings=normalizeSettings(loadJSON(STORAGE_KEYS.settings,null));
+  var savedHighScores=loadJSON(STORAGE_KEYS.highScores,[]);
+  var highScores=Array.isArray(savedHighScores)?savedHighScores:[];
+  var globalHighScores=[];
+  var savedAchievements=loadJSON(STORAGE_KEYS.achievements,[]);
+  var unlockedAchievements=Array.isArray(savedAchievements)?savedAchievements:[];
+  var stats=normalizeStats(loadJSON(STORAGE_KEYS.stats,null));
+  var upgrades=normalizeUpgrades(loadJSON(STORAGE_KEYS.upgrades,null));
+  var totalCoins=clamp(Math.round(Number(loadJSON(STORAGE_KEYS.coins,0))||0),0,SCORE_LIMITS.coins);
+  var leaderboardStatus="loading";
+  var leaderboardSyncing=false;
+  var cachedBestScore=null;
+  var gameMode="menu";
+  var gameClock=0;
+  var lastFrameTime=0;
+  var currentSidePanel="leaderboard";
+  var runSaved=false;
+
+  // ═══════════════════════════════════════════
+  // I18N
+  // ═══════════════════════════════════════════
+  var I18N={
+    ru:{
+      menuSubtitle:"Летите сквозь погоду, города и космос. Собирайте кольца, держите комбо и используйте усиления.",
+      start:"Старт",leaderboard:"Рекорды",settings:"Настройки",overview:"Профиль",shop:"Апгрейды",
+      bestRun:"Лучший счёт",gamesPlayed:"Запуски",achievements:"Достижения",
+      controlsIntro:"Управление: мышь, тач, WASD или стрелки. P/Esc — пауза, F — полный экран, M — звук.",
+      noScores:"Рекордов пока нет.",leaderboardPlayer:"Игрок",leaderboardBest:"Рекорд",
+      leaderboardRuns:"Игр",leaderboardCombo:"Комбо",leaderboardLast:"Последний",
+      leaderboardOnline:"Общая таблица онлайн",leaderboardOffline:"Оффлайн — сохранённые результаты",
+      leaderboardSaving:"Сохраняем результат",leaderboardLoading:"Загрузка таблицы",
+      language:"Язык",playerName:"Имя пилота",graphics:"Графика",controls:"Управление",
+      sound:"Звук",reducedMotion:"Меньше анимации",immortalMode:"Бессмертие (без рекордов)",
+      immortalNote:"Для просмотра всех этапов. Очки не идут в рекорды.",
+      immortalHud:"Бессмертие",score:"Счёт",best:"Рекорд",lives:"Жизни",combo:"Комбо",
+      speed:"Скорость",stage:"Этап",powerup:"Усиление",flyingOver:"Пролёт",coins:"Валюта",balance:"Баланс",
+      help:"Кольца = очки + комбо. Усиления помогают выжить. Держись в воздухе как можно дольше!",
+      pause:"Пауза",mute:"Выкл. звук",unmute:"Вкл. звук",fullscreen:"Полный экран",
+      resume:"Продолжить",restart:"Заново",mainMenu:"Меню",runScore:"Счёт за полёт",
+      gameOverTitle:"Полёт завершён",gameOverText:"Результат сохранён. Попробуй удержать комбо дольше.",
+      crashTitle:"Крушение",reviveText:"Восстановиться за {cost} очков? {seconds}с.",
+      reviveBtn:"Восстать ({cost})",pausedTitle:"Пауза",pausedText:"Полёт на паузе.",
+      threeError:"Three.js не загрузился. Проверь соединение и перезагрузи страницу.",
+      reload:"Обновить",achievementTitle:"Достижение открыто",
+      graphicsLow:"Низкая",graphicsMedium:"Средняя",graphicsHigh:"Высокая",
+      controlsHybrid:"Гибрид",controlsPointer:"Мышь/тач",controlsKeyboard:"Клавиатура",
+      stageSunny:"Солнце",stageDesert:"Пустыня",stageSnow:"Снег",stageStorm:"Шторм",stageAurora:"Сияние",stageSpace:"Космос",
+      shield:"Щит",magnet:"Магнит",slow:"Замедление",boost:"Ускорение",score2x:"x2 очки",timeWarp:"Стазис",starPower:"Звезда",extraLife:"+1 жизнь",
+      shoot:"Огонь",nearMiss:"Рискованный пролёт",bulletTime:"Замедление",asteroidWave:"Волна астероидов",
+      boss:"БОСС",missionRings:"Колец {n}",missionCombo:"Комбо {n}",missionCoins:"Монет {n}",missionPowerups:"Усилений {n}",missionSurvive:"Выжить {n}с",
+      upName_shield:"Долгий щит",upDesc_shield:"Щит держится дольше",upName_magnet:"Сильный магнит",upDesc_magnet:"Кольца тянутся дальше",upName_coin:"Золотой курс",upDesc_coin:"Больше валюты за счёт",upName_lives:"Корпус",upDesc_lives:"Больше стартовых жизней",upName_combo:"Комбо-мастер",upDesc_combo:"Больше очков за серию",upName_power:"Долгая сила",upDesc_power:"Все усиления дольше",upName_score:"Опыт пилота",upDesc_score:"Бонус к очкам с начала",
+      firstRingName:"Первое кольцо",firstRingDesc:"Собрано первое кольцо.",
+      combo5Name:"Чистая серия",combo5Desc:"Комбо из 5 колец.",
+      score300Name:"Сквозь снег",score300Desc:"Добрался до снежного этапа.",
+      score1000Name:"Орбита",score1000Desc:"Долетел до космоса.",
+      reviveName:"Второй шанс",reviveDesc:"Использовано восстановление.",
+      survivor60Name:"Минутный пилот",survivor60Desc:"Выжил 60 секунд.",
+      combo20Name:"Мастер комбо",combo20Desc:"Комбо из 20 колец!",combo50Name:"Безупречный",combo50Desc:"Комбо из 50 колец.",reachDesertName:"В пустыню",reachDesertDesc:"Долетел до пустыни.",reachStormName:"В сердце бури",reachStormDesc:"Долетел до шторма.",reachAuroraName:"Сияющий",reachAuroraDesc:"Долетел до северного сияния.",coins100Name:"Копилка",coins100Desc:"100 монет всего.",bossKillName:"Убийца босса",bossKillDesc:"Победил босса.",maxUpgradeName:"Идеальный пилот",maxUpgradeDesc:"Максимальный апгрейд."
+    },
+    kk:{
+      menuSubtitle:"Ауа райы, қалалар және ғарыш арқылы ұш. Сақиналарды жина, комбоны сақта!",
+      start:"Бастау",leaderboard:"Рекордтар",settings:"Баптаулар",overview:"Профиль",shop:"Апгрейдтер",
+      bestRun:"Үздік ұпай",gamesPlayed:"Ойындар",achievements:"Жетістіктер",
+      controlsIntro:"Басқару: тышқан, touch, WASD немесе бағыт пернелері. P/Esc — кідіріс, F — толық экран.",
+      noScores:"Әзірге рекорд жоқ.",leaderboardPlayer:"Ойыншы",leaderboardBest:"Рекорд",
+      leaderboardRuns:"Ойын",leaderboardCombo:"Комбо",leaderboardLast:"Соңғы",
+      leaderboardOnline:"Ортақ кесте онлайн",leaderboardOffline:"Оффлайн — сақталған нәтижелер",
+      leaderboardSaving:"Нәтиже сақталуда",leaderboardLoading:"Кесте жүктелуде",
+      language:"Тіл",playerName:"Ұшқыш аты",graphics:"Графика",controls:"Басқару",
+      sound:"Дыбыс",reducedMotion:"Анимацияны азайту",immortalMode:"Өлмейтін режим (рекордсыз)",
+      immortalNote:"Барлық кезеңді көруге арналған.",
+      immortalHud:"Өлмейтін",score:"Ұпай",best:"Рекорд",lives:"Өмір",combo:"Комбо",
+      speed:"Жылдамдық",stage:"Кезең",powerup:"Күшейткіш",flyingOver:"Үстінен ұшу",coins:"Валюта",balance:"Баланс",
+      help:"Сақиналар ұпай мен комбо береді. Күшейткіштер аман қалуға көмектеседі.",
+      pause:"Кідіріс",mute:"Дыбысты өшіру",unmute:"Дыбысты қосу",fullscreen:"Толық экран",
+      resume:"Жалғастыру",restart:"Қайта бастау",mainMenu:"Мәзір",runScore:"Ұшу ұпайы",
+      gameOverTitle:"Ұшу аяқталды",gameOverText:"Нәтиже сақталды.",
+      crashTitle:"Соқтығыс",reviveText:"{cost} ұпайға қалпына келу? {seconds}с.",
+      reviveBtn:"Қалпына келу ({cost})",pausedTitle:"Кідіріс",pausedText:"Ұшу тоқтатылды.",
+      threeError:"Three.js жүктелмеді. Байланысты тексеріп, бетті жаңарт.",
+      reload:"Жаңарту",achievementTitle:"Жетістік ашылды",
+      graphicsLow:"Төмен",graphicsMedium:"Орташа",graphicsHigh:"Жоғары",
+      controlsHybrid:"Аралас",controlsPointer:"Тышқан/touch",controlsKeyboard:"Пернетақта",
+      stageSunny:"Күн",stageDesert:"Шөл",stageSnow:"Қар",stageStorm:"Дауыл",stageAurora:"Шұғыла",stageSpace:"Ғарыш",
+      shield:"Қалқан",magnet:"Магнит",slow:"Баяулату",boost:"Жеделдету",score2x:"x2 ұпай",timeWarp:"Стазис",starPower:"Жұлдыз",extraLife:"+1 өмір",
+      shoot:"Ату",nearMiss:"Қауіпті өту",bulletTime:"Баяу уақыт",asteroidWave:"Астероид толқыны",
+      boss:"БАС",missionRings:"{n} сақина",missionCombo:"{n} комбо",missionCoins:"{n} тиын",missionPowerups:"{n} күшейткіш",missionSurvive:"{n}с аман",
+      upName_shield:"Ұзақ қалқан",upDesc_shield:"Қалқан ұзақ",upName_magnet:"Күшті магнит",upDesc_magnet:"Жинау радиусы үлкен",upName_coin:"Алтын курс",upDesc_coin:"Ұпайдан валюта көбірек",upName_lives:"Корпус",upDesc_lives:"Бастапқы өмір көп",upName_combo:"Комбо шебері",upDesc_combo:"Серия ұпайы көп",upName_power:"Ұзақ күш",upDesc_power:"Күшейткіш ұзақ",upName_score:"Тәжірибе",upDesc_score:"Бастапқы ұпай бонусы",
+      firstRingName:"Алғашқы сақина",firstRingDesc:"Алғашқы сақина жиналды.",
+      combo5Name:"Таза серия",combo5Desc:"5 сақинадан комбо.",
+      score300Name:"Қарға жету",score300Desc:"Қарлы кезеңге жеттің.",
+      score1000Name:"Орбита",score1000Desc:"Ғарышқа жеттің.",
+      reviveName:"Екінші мүмкіндік",reviveDesc:"Қалпына келу қолданылды.",
+      survivor60Name:"Бір минуттық ұшқыш",survivor60Desc:"60 секунд аман қалдың.",
+      combo20Name:"Комбо шебері",combo20Desc:"20 сақинадан комбо!",combo50Name:"Мінсіз",combo50Desc:"50 сақинадан комбо.",reachDesertName:"Шөлге",reachDesertDesc:"Шөлге жеттің.",reachStormName:"Дауылға",reachStormDesc:"Дауылға жеттің.",reachAuroraName:"Шұғыла",reachAuroraDesc:"Шұғылаға жеттің.",coins100Name:"Қор",coins100Desc:"Жалпы 100 тиын.",bossKillName:"Бас жеңуші",bossKillDesc:"Басты жеңдің.",maxUpgradeName:"Мінсіз ұшқыш",maxUpgradeDesc:"Апгрейд максимум."
+    },
+    en:{
+      menuSubtitle:"Fly through weather, cities and space. Collect rings, hold your combo, and use powerups.",
+      start:"Start",leaderboard:"Leaderboard",settings:"Settings",overview:"Profile",shop:"Upgrades",
+      bestRun:"Best score",gamesPlayed:"Runs",achievements:"Achievements",
+      controlsIntro:"Controls: mouse, touch, WASD, or arrows. P/Esc pauses, F fullscreen, M mutes.",
+      noScores:"No scores yet.",leaderboardPlayer:"Player",leaderboardBest:"Best",
+      leaderboardRuns:"Runs",leaderboardCombo:"Combo",leaderboardLast:"Last",
+      leaderboardOnline:"Global leaderboard online",leaderboardOffline:"Offline — saved results shown",
+      leaderboardSaving:"Saving score online",leaderboardLoading:"Loading leaderboard",
+      language:"Language",playerName:"Pilot name",graphics:"Graphics",controls:"Controls",
+      sound:"Sound",reducedMotion:"Reduced motion",immortalMode:"Immortality (no records)",
+      immortalNote:"For exploring every stage. Scores won't count.",
+      immortalHud:"Immortal",score:"Score",best:"Best",lives:"Lives",combo:"Combo",
+      speed:"Speed",stage:"Stage",powerup:"Powerup",flyingOver:"Flying over",coins:"Currency",balance:"Balance",
+      help:"Rings build score and combo. Powerups help you survive. Stay airborne as long as possible!",
+      pause:"Pause",mute:"Mute",unmute:"Unmute",fullscreen:"Fullscreen",
+      resume:"Resume",restart:"Restart",mainMenu:"Menu",runScore:"Run score",
+      gameOverTitle:"Flight complete",gameOverText:"Score saved. Try to hold your combo longer.",
+      crashTitle:"Crash",reviveText:"Revive for {cost} points? {seconds}s left.",
+      reviveBtn:"Revive ({cost})",pausedTitle:"Paused",pausedText:"Flight is paused.",
+      threeError:"Three.js could not be loaded. Check connection and reload.",
+      reload:"Reload",achievementTitle:"Achievement unlocked",
+      graphicsLow:"Low",graphicsMedium:"Medium",graphicsHigh:"High",
+      controlsHybrid:"Hybrid",controlsPointer:"Pointer/touch",controlsKeyboard:"Keyboard",
+      stageSunny:"Sunny",stageDesert:"Desert",stageSnow:"Snow",stageStorm:"Storm",stageAurora:"Aurora",stageSpace:"Space",
+      shield:"Shield",magnet:"Magnet",slow:"Slow time",boost:"Boost",score2x:"x2 Score",timeWarp:"Time Warp",starPower:"Star",extraLife:"+1 Life",
+      shoot:"Fire",nearMiss:"Near miss",bulletTime:"Bullet time",asteroidWave:"Asteroid wave",
+      boss:"BOSS",missionRings:"{n} rings",missionCombo:"Combo {n}",missionCoins:"{n} coins",missionPowerups:"{n} powerups",missionSurvive:"Survive {n}s",
+      upName_shield:"Long Shield",upDesc_shield:"Shield lasts longer",upName_magnet:"Strong Magnet",upDesc_magnet:"Larger ring pickup radius",upName_coin:"Gold Rate",upDesc_coin:"More currency from score",upName_lives:"Hull",upDesc_lives:"More starting lives",upName_combo:"Combo Master",upDesc_combo:"More streak score",upName_power:"Long Power",upDesc_power:"All powerups last longer",upName_score:"Pilot XP",upDesc_score:"Starting score bonus",
+      firstRingName:"First ring",firstRingDesc:"Collect the first ring.",
+      combo5Name:"Clean streak",combo5Desc:"Reach a 5-ring combo.",
+      score300Name:"Through snow",score300Desc:"Reach the snow stage.",
+      score1000Name:"Orbit",score1000Desc:"Reach space.",
+      reviveName:"Second chance",reviveDesc:"Use a revive.",
+      survivor60Name:"Minute pilot",survivor60Desc:"Survive 60 seconds.",
+      combo20Name:"Combo master",combo20Desc:"Reach a 20-ring combo!",combo50Name:"Flawless",combo50Desc:"Reach a 50-ring combo.",reachDesertName:"Into the Sands",reachDesertDesc:"Reach the desert.",reachStormName:"Storm Core",reachStormDesc:"Reach the storm.",reachAuroraName:"Luminous",reachAuroraDesc:"Reach the aurora.",coins100Name:"Piggy Bank",coins100Desc:"Earn 100 total coins.",bossKillName:"Boss Slayer",bossKillDesc:"Defeat a boss.",maxUpgradeName:"Perfect Pilot",maxUpgradeDesc:"Max an upgrade."
+    }
+  };
+
+  var ACHIEVEMENTS=["firstRing","combo5","combo20","combo50","reachDesert","score300","reachStorm","reachAurora","score1000","revive","survivor60","coins100","bossKill","maxUpgrade"];
+  var STAGE_KEYS=["stageSunny","stageDesert","stageSnow","stageStorm","stageAurora","stageSpace"];
+  var POWERUP_KEYS={shield:"shield",magnet:"magnet",slow:"slow",boost:"boost",score2x:"score2x",timeWarp:"timeWarp",starPower:"starPower",extraLife:"extraLife"};
+  var UPGRADE_KEYS=["shield","magnet","coin","lives","combo","power","score"];
+
+  function t(key,reps){
+    var lang=I18N[settings.language]?settings.language:"en";
+    var text=I18N[lang][key]||I18N.en[key]||key;
+    if(reps) Object.keys(reps).forEach(function(n){ text=text.replace("{"+n+"}",reps[n]); });
+    return text;
+  }
+
+  // ═══════════════════════════════════════════
+  // SOUND MANAGER
+  // ═══════════════════════════════════════════
+  var soundManager={
+    audioContext:null, musicNodes:[], musicPlaying:false,
+    muted:settings.sound===false,
+    init:function(){
+      if(this.audioContext) return;
+      try{ this.audioContext=new(window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+    },
+    ensureReady:function(){
+      this.init();
+      if(this.audioContext&&this.audioContext.state==="suspended") this.audioContext.resume();
+    },
+    isSilent:function(){ return this.muted||settings.sound===false; },
+    setMuted:function(val){
+      this.muted=val; settings.sound=!val; saveSettings();
+      if(val) this.stopMusic();
+      else if(gameMode==="playing"){ this.ensureReady(); this.startMusic(); }
+      applyLocalization();
+    },
+    _play:function(freq,type,dur,gainVal,rampFreq){
+      if(!this.audioContext||this.isSilent()) return;
+      var o=this.audioContext.createOscillator();
+      var g=this.audioContext.createGain();
+      o.connect(g); g.connect(this.audioContext.destination);
+      o.type=type||'sine';
+      o.frequency.setValueAtTime(freq,this.audioContext.currentTime);
+      if(rampFreq) o.frequency.exponentialRampToValueAtTime(rampFreq,this.audioContext.currentTime+dur);
+      g.gain.setValueAtTime(gainVal||0.35,this.audioContext.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.01,this.audioContext.currentTime+dur);
+      o.start(this.audioContext.currentTime);
+      o.stop(this.audioContext.currentTime+dur);
+    },
+    playCollect:function(combo){
+      if(!this.audioContext||this.isSilent()) return;
+      var baseFreq=880+Math.min(combo*30,440);
+      this._play(baseFreq,'sine',0.2,0.38,Math.min(baseFreq*2,3500));
+    },
+    playObstacle:function(){ this._play(150,'sawtooth',0.4,0.5,50); },
+    playStart:function(){ this._play(220,'sine',0.6,0.35,880); },
+    playPowerup:function(){
+      if(!this.audioContext||this.isSilent()) return;
+      var now=this.audioContext.currentTime;
+      [440,660,880].forEach(function(f,i){
+        var o=soundManager.audioContext.createOscillator();
+        var g=soundManager.audioContext.createGain();
+        o.connect(g); g.connect(soundManager.audioContext.destination);
+        o.type="triangle"; o.frequency.setValueAtTime(f,now+i*0.06);
+        g.gain.setValueAtTime(0.25,now+i*0.06);
+        g.gain.exponentialRampToValueAtTime(0.01,now+0.3+i*0.06);
+        o.start(now+i*0.06); o.stop(now+0.4+i*0.06);
+      });
+    },
+    playBoost:function(){ this._play(300,'square',0.5,0.28,1200); },
+    playShieldBreak:function(){ this._play(440,'sawtooth',0.3,0.4,110); },
+    playAchievement:function(){
+      if(!this.audioContext||this.isSilent()) return;
+      var now=this.audioContext.currentTime;
+      [523,659,784,1046].forEach(function(freq,i){
+        var o=soundManager.audioContext.createOscillator();
+        var g=soundManager.audioContext.createGain();
+        o.connect(g); g.connect(soundManager.audioContext.destination);
+        o.type="sine"; o.frequency.setValueAtTime(freq,now+i*0.07);
+        g.gain.setValueAtTime(0.2,now+i*0.07);
+        g.gain.exponentialRampToValueAtTime(0.01,now+0.4+i*0.07);
+        o.start(now+i*0.07); o.stop(now+0.5+i*0.07);
+      });
+    },
+    playShoot:function(){ this._play(760,'square',0.12,0.12,1120); },
+    playNearMiss:function(){ this._play(980,'triangle',0.18,0.16,1460); },
+    playBulletTime:function(){ this._play(180,'sine',0.55,0.24,90); },
+    startMusic:function(){
+      if(!this.audioContext||this.isSilent()||this.musicPlaying) return;
+      this.musicPlaying=true;
+      this._scheduleMusic();
+    },
+    _scheduleMusic:function(){
+      if(!this.musicPlaying||!this.audioContext||this.isSilent()) return;
+      var ctx=this.audioContext;
+      var scales=[
+        [261.63,329.63,392,523.25],
+        [220,277.18,329.63,440],
+        [196,246.94,293.66,392],
+        [146.83,196,233.08,293.66],
+        [311.13,369.99,466.16,622.25],
+        [98,130.81,196,261.63]
+      ];
+      var scale=scales[currentStage]||scales[0];
+      var beat=(settings.reducedMotion?0.72:0.48);
+      var note=scale[Math.floor(Math.random()*scale.length)]*(Math.random()<0.22?2:1);
+      var o=ctx.createOscillator();
+      var g=ctx.createGain();
+      o.type=currentStage>=4?'triangle':'sine';
+      o.frequency.setValueAtTime(note,ctx.currentTime);
+      g.gain.setValueAtTime(0.0001,ctx.currentTime);
+      g.gain.linearRampToValueAtTime(0.035,ctx.currentTime+0.04);
+      g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+beat);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(ctx.currentTime); o.stop(ctx.currentTime+beat+0.04);
+      this.musicNodes.push({osc:o,gain:g});
+      var self=this;
+      setTimeout(function(){
+        self.musicNodes=self.musicNodes.filter(function(n){ return n.osc!==o; });
+        self._scheduleMusic();
+      },beat*1000);
+    },
+    stopMusic:function(){
+      if(!this.audioContext) return;
+      this.musicPlaying=false;
+      this.musicNodes.forEach(function(node){
+        node.gain.gain.linearRampToValueAtTime(0,soundManager.audioContext.currentTime+1);
+        setTimeout(function(){ try{ node.osc.stop(); }catch(e){} },1000);
+      });
+      this.musicNodes=[];
+    }
+  };
+
+  // ═══════════════════════════════════════════
+  // THREE.JS SCENE GLOBALS
+  // ═══════════════════════════════════════════
+  var scene,camera,renderer,container;
+  var hemisphereLight,shadowLight;
+  var sky,forest,land,orbit,airplane,sun,solarSystem,stars;
+  var cityWorld; var cities=[];
+  var mousePos={x:0,y:0};
+  var offSet=-3000;
+  var SHOW_GROUND_PLANET=true;
+  var ENABLE_BOSSES=false;
+  var rings=[],obstacles=[],powerups=[],coins=[],bullets=[],asteroids=[];
+  var score=0,lives=3,gameOver=false,hitTimer=0;
+  var runTime=0,distance=0;
+  var comboCount=0,comboTimer=0,bestComboThisRun=0,ringsCollectedThisRun=0,runCoins=0,powerupsThisRun=0;
+  var currentStage=0,previousStage=-1;
+  var scoreMultiplier=1,maxLives=3;
+  var activeEffects={shield:0,magnet:0,slow:0,boost:0,score2x:0,timeWarp:0,starPower:0,extraLife:0};
+  var powerupTypes=["shield","magnet","slow","boost","score2x","timeWarp","starPower","extraLife"];
+  var STAGE_THRESHOLDS={desert:500,snow:1200,storm:2100,aurora:3300,space:4800};
+  var POWERUP_DURATIONS={shield:6,magnet:4.5,slow:4,boost:5,score2x:7,timeWarp:4,starPower:6,extraLife:0,reviveShield:2};
+  var activeMissions=[],bossEnemy=null,bossSpawnedStages={};
+  var shootCooldown=0,shootCooldownMax=0.32;
+  var nearMissCount=0,screenShakeTimer=0,speedLineTimer=0,wingTrailBoost=0;
+  var bulletTimeTimer=0,bulletTimeTriggered=false;
+  var asteroidWaveTimer=0,asteroidWaveActive=0;
+  var comboMilestonesHit={};
+
+  var scoreEl=document.getElementById("score");
+  var bestScoreEl=document.getElementById("bestScore");
+  var livesEl=document.getElementById("lives");
+  var coinsEl=document.getElementById("coins");
+  var comboEl=document.getElementById("combo");
+  var speedEl=document.getElementById("speed");
+  var stageNameEl=document.getElementById("stageName");
+  var powerupBadgeEl=document.getElementById("powerupBadge");
+  var powerupTextEl=document.getElementById("powerupText");
+  var cityBadgeEl=document.getElementById("cityBadge");
+  var cityNameEl=document.getElementById("cityName");
+  var cityPrefixEl=document.getElementById("cityPrefix");
+  var flashEl=document.getElementById("flash");
+  var shieldFlashEl=document.getElementById("shieldFlash");
+  var dangerRingEl=document.getElementById("dangerRing");
+  var helpEl=document.getElementById("help");
+  var menuOverlayEl=document.getElementById("menuOverlay");
+  var modalEl=document.getElementById("modal");
+  var modalTitleEl=document.getElementById("modalTitle");
+  var modalTextEl=document.getElementById("modalText");
+  var runSummaryEl=document.getElementById("runSummary");
+  var runSummaryLabelEl=document.getElementById("runSummaryLabel");
+  var runSummaryScoreEl=document.getElementById("runSummaryScore");
+  var runDetailsEl=document.getElementById("runDetails");
+  var startBtn=document.getElementById("startBtn");
+  var leaderboardBtn=document.getElementById("leaderboardBtn");
+  var settingsBtn=document.getElementById("settingsBtn");
+  var pauseBtn=document.getElementById("pauseBtn");
+  var muteBtn=document.getElementById("muteBtn");
+  var fullscreenBtn=document.getElementById("fullscreenBtn");
+  var resumeBtn=document.getElementById("resumeBtn");
+  var restartBtn=document.getElementById("restartBtn");
+  var reviveBtn=document.getElementById("reviveBtn");
+  var menuBtn=document.getElementById("menuBtn");
+  var languageSelect=document.getElementById("languageSelect");
+  var playerNameInput=document.getElementById("playerNameInput");
+  var graphicsSelect=document.getElementById("graphicsSelect");
+  var controlSelect=document.getElementById("controlSelect");
+  var soundToggle=document.getElementById("soundToggle");
+  var motionToggle=document.getElementById("motionToggle");
+  var immortalToggle=document.getElementById("immortalToggle");
+  var leaderboardListEl=document.getElementById("leaderboardList");
+  var settingsPanelEl=document.getElementById("settingsPanel");
+  var sidePanelTitleEl=document.getElementById("sidePanelTitle");
+  var achievementPopupEl=document.getElementById("achievementPopup");
+  var achievementTitleEl=document.getElementById("achievementTitle");
+  var achievementDescEl=document.getElementById("achievementDesc");
+  var threeErrorEl=document.getElementById("threeError");
+  var threeErrorTextEl=document.getElementById("threeErrorText");
+  var reloadBtn=document.getElementById("reloadBtn");
+  var comboBarEl=document.getElementById("comboBar");
+  var speedLinesEl=document.getElementById("speedLines");
+  var bulletTimeTintEl=document.getElementById("bulletTimeTint");
+  var missionTrackerEl=document.getElementById("missionTracker");
+  var bossHudEl=document.getElementById("bossHud");
+  var bossNameEl=document.getElementById("bossName");
+  var bossHealthTextEl=document.getElementById("bossHealthText");
+  var bossHealthFillEl=document.getElementById("bossHealthFill");
+  var scorePopupContainerEl=document.getElementById("scorePopupContainer");
+  var stageFlashEl=document.getElementById("stageFlash");
+  var shopBtn=document.getElementById("shopBtn");
+  var shopPanelEl=document.getElementById("shopPanel");
+  var shopCoinsEl=document.getElementById("shopCoins");
+  var shopGridEl=document.getElementById("shopGrid");
+  var balanceLabelEl=document.getElementById("balanceLabel");
+  var shootTouchBtn=document.getElementById("shootTouchBtn");
+
+  var REVIVE_COST=150;
+  var reviveTimer=0;
+  var reviveInterval=null;
+  var keys={};
+  var hudCache={};
+  var frameCounter=0;
+
+  // ═══════════════════════════════════════════
+  // HELPERS
+  // ═══════════════════════════════════════════
+  function rand(min,max){ return min+Math.random()*(max-min); }
+  function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+  function lerp(a,b,t){ return (1-t)*a+t*b; }
+  function normalize(v,vmin,vmax,tmin,tmax){
+    var nv=clamp(v,vmin,vmax);
+    return tmin+((nv-vmin)/(vmax-vmin))*(tmax-tmin);
+  }
+  function setTextIfChanged(el,key,val){
+    val=String(val);
+    if(hudCache[key]!==val){ el.textContent=val; hudCache[key]=val; }
+  }
+  function setHTMLIfChanged(el,key,val){
+    if(hudCache[key]!==val){ el.innerHTML=val; hudCache[key]=val; }
+  }
+  function setDisplayIfChanged(el,key,val){
+    if(hudCache[key]!==val){ el.style.display=val; hudCache[key]=val; }
+  }
+  function clearHUDCache(){ hudCache={}; }
+  function saveSettings(){ settings=normalizeSettings(settings); saveJSON(STORAGE_KEYS.settings,settings); }
+  function saveStats(){ stats=normalizeStats(stats); saveJSON(STORAGE_KEYS.stats,stats); }
+  function saveUpgrades(){ upgrades=normalizeUpgrades(upgrades); saveJSON(STORAGE_KEYS.upgrades,upgrades); }
+  function saveCoins(){ totalCoins=clamp(Math.round(totalCoins),0,SCORE_LIMITS.coins); saveJSON(STORAGE_KEYS.coins,totalCoins); }
+  function getClientId(){
+    var id=loadJSON(STORAGE_KEYS.clientId,null);
+    if(!id){ id="pilot-"+Math.random().toString(36).slice(2)+Date.now().toString(36); saveJSON(STORAGE_KEYS.clientId,id); }
+    return id;
+  }
+  function makeRunId(){ return getClientId()+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8); }
+  function normalizePlayerName(name){ var c=String(name||"Pilot").trim().replace(/\s+/g," ").slice(0,16); return c||"Pilot"; }
+  function escapeHTML(v){ return String(v).replace(/[&<>"']/g,function(c){ return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
+  function gameNow(){ return gameClock*1000; }
+  function invalidateBestScore(){ cachedBestScore=null; }
+
+  // ═══════════════════════════════════════════
+  // SCORE POPUP EFFECTS
+  // ═══════════════════════════════════════════
+  function spawnScorePopup(text,x,y,cls){
+    var el=document.createElement("div");
+    el.className="score-popup"+(cls?" "+cls:"");
+    el.textContent=text;
+    // Convert 3D plane position to 2D screen
+    var W=window.innerWidth, H=window.innerHeight;
+    var px=clamp(((x+100)/200)*W,40,W-80);
+    var py=clamp(((1-(y/280))*H),60,H-60);
+    el.style.left=px+"px";
+    el.style.top=py+"px";
+    scorePopupContainerEl.appendChild(el);
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); },950);
+  }
+
+  // ═══════════════════════════════════════════
+  // LEADERBOARD & SCORES
+  // ═══════════════════════════════════════════
+  function normalizeScoreNumber(v,max){ return clamp(Math.round(Number(v)||0),0,max); }
+  function normalizeScoreDate(v){
+    var ts=Date.parse(String(v||""));
+    var now=Date.now();
+    if(!isFinite(ts)||ts>now+86400000||ts<1704067200000) ts=now;
+    return new Date(ts).toISOString();
+  }
+  function sanitizeScoreEntry(entry){
+    if(!entry||entry.immortalMode===true) return null;
+    var name=normalizePlayerName(entry.name);
+    var rawScore=Number(entry.score);
+    if(!isFinite(rawScore)||rawScore<0) return null;
+    if(rawScore>SCORE_LIMITS.score) return null;
+    var sc=normalizeScoreNumber(entry.score,SCORE_LIMITS.score);
+    var combo=normalizeScoreNumber(entry.combo,SCORE_LIMITS.combo);
+    var ri=normalizeScoreNumber(entry.rings,SCORE_LIMITS.rings);
+    var dist=normalizeScoreNumber(entry.distance,SCORE_LIMITS.distance);
+    var rt=Math.min(SCORE_LIMITS.runTime,Math.max(0,Number(entry.runTime)||0));
+    var stage=clamp(Math.round(Number(entry.stage)||0),0,5);
+    var date=normalizeScoreDate(entry.date);
+    var rawId=String(entry.id||"x");
+    var id=rawId.replace(/[^a-z0-9а-яёқңғүұәөһі._:-]/gi,"").slice(0,96)||"id-"+sc+"-"+date;
+    if(!name||sc<0) return null;
+    return{id,name,score:sc,combo,stage,rings:ri,distance:dist,runTime:Number(rt.toFixed(1)),date};
+  }
+  function normalizeScoreEntries(entries){
+    if(!Array.isArray(entries)) return [];
+    return entries.map(sanitizeScoreEntry).filter(Boolean);
+  }
+  function mergeScoreEntries(local,remote){
+    var byId={};
+    normalizeScoreEntries(remote).concat(normalizeScoreEntries(local)).forEach(function(e){ byId[e.id]=e; });
+    return Object.keys(byId).map(function(id){ return byId[id]; }).sort(function(a,b){
+      if(b.score!==a.score) return b.score-a.score;
+      if(b.combo!==a.combo) return b.combo-a.combo;
+      return String(b.date).localeCompare(String(a.date));
+    });
+  }
+  function getAllScoreEntries(){ return mergeScoreEntries(highScores,globalHighScores); }
+  function getBestScore(){
+    if(cachedBestScore!==null) return cachedBestScore;
+    var best=0;
+    getAllScoreEntries().forEach(function(e){ best=Math.max(best,Number(e.score)||0); });
+    cachedBestScore=best;
+    return cachedBestScore;
+  }
+  function getLeaderboardRows(){
+    var players={};
+    getAllScoreEntries().forEach(function(entry){
+      var name=normalizePlayerName(entry.name);
+      if(!players[name]) players[name]={name,best:0,runs:0,bestCombo:0,lastScore:0,lastDate:"",stage:0};
+      var row=players[name];
+      var es=Number(entry.score)||0;
+      var ec=Number(entry.combo)||0;
+      row.runs++;
+      row.best=Math.max(row.best,es);
+      row.bestCombo=Math.max(row.bestCombo,ec);
+      row.stage=Math.max(row.stage,Number(entry.stage)||0);
+      if(!row.lastDate||String(entry.date||"")>row.lastDate){ row.lastDate=String(entry.date||""); row.lastScore=es; }
+    });
+    return Object.keys(players).map(function(n){ return players[n]; }).sort(function(a,b){
+      if(b.best!==a.best) return b.best-a.best;
+      if(b.bestCombo!==a.bestCombo) return b.bestCombo-a.bestCombo;
+      return b.runs-a.runs;
+    });
+  }
+
+  highScores=normalizeScoreEntries(highScores).slice(0,LOCAL_SCORE_LIMIT);
+  saveJSON(STORAGE_KEYS.highScores,highScores);
+
+  function setLeaderboardStatus(status){ leaderboardStatus=status; if(currentSidePanel==="leaderboard") renderLeaderboard(); }
+  function fetchGlobalLeaderboard(){
+    if(!GLOBAL_LEADERBOARD_ENDPOINT||!window.fetch){ setLeaderboardStatus("offline"); return Promise.resolve([]); }
+    setLeaderboardStatus("loading");
+    return fetch(GLOBAL_LEADERBOARD_ENDPOINT+"?t="+Date.now(),{method:"GET",headers:{"Accept":"application/json"},cache:"no-store"})
+      .then(function(r){ if(!r.ok) throw new Error("GET "+r.status); return r.json(); })
+      .then(function(data){
+        globalHighScores=normalizeScoreEntries(data&&(data.scores||(data.data&&data.data.scores)));
+        invalidateBestScore(); setLeaderboardStatus("online"); renderMenuStats(); return globalHighScores;
+      }).catch(function(){ setLeaderboardStatus("offline"); return []; });
+  }
+  function syncGlobalScore(entry){
+    if(!GLOBAL_LEADERBOARD_ENDPOINT||!window.fetch||leaderboardSyncing) return;
+    if(settings.immortalMode) return;
+    var now=Date.now();
+    var lastSync=Number(loadJSON(STORAGE_KEYS.lastScoreSync,0))||0;
+    if(now-lastSync<GLOBAL_SYNC_COOLDOWN_MS) return;
+    saveJSON(STORAGE_KEYS.lastScoreSync,now);
+    leaderboardSyncing=true; setLeaderboardStatus("saving");
+    fetch(GLOBAL_LEADERBOARD_ENDPOINT+"?t="+Date.now(),{method:"GET",headers:{"Accept":"application/json"},cache:"no-store"})
+      .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function(data){
+        var merged=mergeScoreEntries(highScores.concat([entry]),data&&(data.scores||(data.data&&data.data.scores))).slice(0,GLOBAL_SCORE_LIMIT);
+        return fetch(GLOBAL_LEADERBOARD_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({version:1,updatedAt:new Date().toISOString(),scores:merged})})
+          .then(function(r){ if(!r.ok) throw new Error(r.status); globalHighScores=merged; invalidateBestScore(); setLeaderboardStatus("online"); });
+      }).catch(function(){ setLeaderboardStatus("offline"); })
+      .then(function(){ leaderboardSyncing=false; renderLeaderboard(); });
+  }
+  function saveHighScore(){
+    if(runSaved||(score<=0&&runTime<1)) return;
+    runSaved=true;
+    if(settings.immortalMode){ renderMenuStats(); renderLeaderboard(); return; }
+    runCoins+=calculateScoreCurrencyReward(score);
+    var entry=sanitizeScoreEntry({
+      id:makeRunId(),name:normalizePlayerName(settings.playerName),score,combo:bestComboThisRun,
+      stage:currentStage,rings:ringsCollectedThisRun,distance:Math.round(distance),
+      runTime:Number(runTime.toFixed(1)),date:new Date().toISOString()
+    });
+    if(!entry) return;
+    highScores.push(entry);
+    highScores.sort(function(a,b){ return String(b.date||"").localeCompare(String(a.date||"")); });
+    highScores=normalizeScoreEntries(highScores).slice(0,LOCAL_SCORE_LIMIT);
+    saveJSON(STORAGE_KEYS.highScores,highScores);
+    invalidateBestScore();
+    stats.totalScore+=score; stats.totalRings+=ringsCollectedThisRun;
+    totalCoins+=runCoins; saveCoins();
+    if(totalCoins>=100) unlockAchievement("coins100");
+    stats.totalDistance+=Math.round(distance); stats.bestCombo=Math.max(stats.bestCombo||0,bestComboThisRun);
+    stats.totalCoins+=runCoins; stats.totalPowerups+=powerupsThisRun;
+    saveStats(); renderMenuStats(); renderLeaderboard(); syncGlobalScore(entry);
+  }
+
+  // ═══════════════════════════════════════════
+  // ACHIEVEMENTS
+  // ═══════════════════════════════════════════
+  function isAchievementUnlocked(id){ return unlockedAchievements.indexOf(id)!==-1; }
+  function unlockAchievement(id){
+    if(settings.immortalMode) return;
+    if(isAchievementUnlocked(id)||ACHIEVEMENTS.indexOf(id)===-1) return;
+    unlockedAchievements.push(id);
+    saveJSON(STORAGE_KEYS.achievements,unlockedAchievements);
+    achievementTitleEl.textContent=t("achievementTitle");
+    achievementDescEl.textContent=t(id+"Name")+" — "+t(id+"Desc");
+    achievementPopupEl.classList.add("show");
+    soundManager.playAchievement();
+    setTimeout(function(){ achievementPopupEl.classList.remove("show"); },2800);
+    renderMenuStats();
+  }
+
+  // ═══════════════════════════════════════════
+  // UI RENDERING
+  // ═══════════════════════════════════════════
+  function renderLeaderboard(){
+    if(!leaderboardListEl) return;
+    var rows=getLeaderboardRows();
+    var statusKey=leaderboardStatus==="online"?"leaderboardOnline":(leaderboardStatus==="saving"?"leaderboardSaving":(leaderboardStatus==="loading"?"leaderboardLoading":"leaderboardOffline"));
+    var statusClass=leaderboardStatus==="online"?"online":(leaderboardStatus==="offline"?"offline":"");
+    var statusHtml='<div class="leaderboard-status '+statusClass+'">'+escapeHTML(t(statusKey))+'</div>';
+    if(!rows.length){
+      leaderboardListEl.innerHTML=statusHtml+'<div class="leaderboard-row"><span>'+escapeHTML(t("noScores"))+'</span></div>';
+      return;
+    }
+    var html=statusHtml+'<table class="leaderboard-table"><thead><tr>'+
+      '<th>'+escapeHTML(t("leaderboardPlayer"))+'</th>'+
+      '<th>'+escapeHTML(t("leaderboardBest"))+'</th>'+
+      '<th>'+escapeHTML(t("leaderboardRuns"))+'</th>'+
+      '<th>'+escapeHTML(t("leaderboardCombo"))+'</th>'+
+      '<th>'+escapeHTML(t("leaderboardLast"))+'</th>'+
+      '</tr></thead><tbody>';
+    html+=rows.slice(0,12).map(function(row,i){
+      return '<tr><td>#'+(i+1)+' '+escapeHTML(row.name)+'</td>'+
+        '<td><strong>'+row.best+'</strong></td>'+
+        '<td>'+row.runs+'</td>'+
+        '<td>'+row.bestCombo+'</td>'+
+        '<td>'+row.lastScore+'</td></tr>';
+    }).join("");
+    leaderboardListEl.innerHTML=html+'</tbody></table>';
+  }
+  function renderMenuStats(){
+    var best=getBestScore();
+    document.getElementById("menuBestScore").textContent=best;
+    document.getElementById("menuGamesPlayed").textContent=stats.gamesPlayed||0;
+    document.getElementById("menuAchievementCount").textContent=unlockedAchievements.length+"/"+ACHIEVEMENTS.length;
+    bestScoreEl.textContent=best;
+    if(shopCoinsEl) shopCoinsEl.textContent=totalCoins;
+  }
+  function setBodyMode(mode){ document.body.className="is-"+mode; }
+  function showLeaderboardPanel(){
+    currentSidePanel="leaderboard";
+    settingsPanelEl.classList.add("hidden");
+    shopPanelEl.classList.add("hidden");
+    leaderboardListEl.classList.remove("hidden");
+    sidePanelTitleEl.textContent=t("leaderboard");
+    renderLeaderboard(); fetchGlobalLeaderboard();
+  }
+  function showShopPanel(){
+    currentSidePanel="shop";
+    leaderboardListEl.classList.add("hidden");
+    settingsPanelEl.classList.add("hidden");
+    shopPanelEl.classList.remove("hidden");
+    sidePanelTitleEl.textContent=t("shop");
+    renderShop();
+  }
+  function showSettingsPanel(){
+    currentSidePanel="settings";
+    leaderboardListEl.classList.add("hidden");
+    shopPanelEl.classList.add("hidden");
+    settingsPanelEl.classList.remove("hidden");
+    sidePanelTitleEl.textContent=t("settings");
+    syncSettingsControls();
+  }
+  function renderShop(){
+    if(!shopGridEl) return;
+    shopCoinsEl.textContent=totalCoins;
+    var icons={shield:"🛡",magnet:"⊙",coin:"★",lives:"❤",combo:"×",power:"⚡",score:"⬆"};
+    shopGridEl.innerHTML=UPGRADE_KEYS.map(function(k){
+      var lvl=upgrades[k]||0, maxed=lvl>=UPGRADE_MAX, cost=maxed?0:upgradeCost(lvl);
+      return '<div class="shop-card"><div class="ico">'+icons[k]+'</div><div><div class="name">'+escapeHTML(t("upName_"+k))+' · Lv '+lvl+'/'+UPGRADE_MAX+'</div><div class="desc">'+escapeHTML(t("upDesc_"+k))+'</div></div><button data-upgrade="'+k+'" '+((maxed||totalCoins>=cost)?"":"disabled")+'>'+(maxed?"MAX":"★ "+cost)+'</button></div>';
+    }).join("");
+    shopGridEl.querySelectorAll("button[data-upgrade]").forEach(function(btn){
+      btn.addEventListener("click",function(){ buyUpgrade(btn.getAttribute("data-upgrade")); });
+    });
+  }
+  function buyUpgrade(key){
+    if(!upgrades.hasOwnProperty(key)) return;
+    var lvl=upgrades[key]||0; if(lvl>=UPGRADE_MAX) return;
+    var cost=upgradeCost(lvl); if(totalCoins<cost) return;
+    totalCoins-=cost; upgrades[key]=lvl+1;
+    saveCoins(); saveUpgrades(); renderShop(); renderMenuStats();
+    if(upgrades[key]>=UPGRADE_MAX) unlockAchievement("maxUpgrade");
+    soundManager.playAchievement();
+  }
+  function getPowerDuration(type){
+    var mult=1+(upgrades.power||0)*0.15;
+    if(type==="shield") mult*=1+(upgrades.shield||0)*0.2;
+    return (POWERUP_DURATIONS[type]||0)*mult;
+  }
+  function getMagnetRadius(){ return 55+(upgrades.magnet||0)*16; }
+  function getScoreCurrencyMultiplier(){ return 0.04+(upgrades.coin||0)*0.006; }
+  function calculateScoreCurrencyReward(value){ return Math.max(0,Math.floor((Number(value)||0)*getScoreCurrencyMultiplier())); }
+  function getStartingLives(){ return 3+(upgrades.lives||0); }
+  function getUpgradeScoreBonus(){ return 1+(upgrades.score||0)*0.1; }
+  function getComboUpgradeBonus(){ return 1+(upgrades.combo||0)*0.12; }
+  var MISSION_POOL=[
+    {type:"rings",target:28,reward:18,key:"missionRings"},
+    {type:"combo",target:12,reward:22,key:"missionCombo"},
+    {type:"powerups",target:3,reward:20,key:"missionPowerups"},
+    {type:"survive",target:55,reward:24,key:"missionSurvive"}
+  ];
+  function generateMissions(){
+    var pool=MISSION_POOL.slice(), out=[];
+    while(out.length<3&&pool.length){
+      var i=Math.floor(Math.random()*pool.length), m=pool.splice(i,1)[0];
+      var scale=1+Math.min(stats.gamesPlayed||0,24)*0.035;
+      out.push({type:m.type,target:Math.round(m.target*scale),reward:m.reward,key:m.key,progress:0,done:false});
+    }
+    activeMissions=out; renderMissions();
+  }
+  function updateMissionProgress(type,value){
+    var changed=false;
+    activeMissions.forEach(function(m){
+      if(m.done||m.type!==type) return;
+      if(type==="combo") m.progress=Math.max(m.progress,Math.min(m.target,value));
+      else m.progress=Math.min(m.target,m.progress+value);
+      if(m.progress>=m.target){
+        m.done=true; runCoins+=m.reward; spawnScorePopup("★ +"+m.reward,airplane.mesh.position.x,airplane.mesh.position.y+45,"combo"); soundManager.playAchievement();
+      }
+      changed=true;
+    });
+    if(changed) renderMissions();
+  }
+  function tickMissions(dt){
+    updateMissionProgress("survive",dt);
+  }
+  function renderMissions(){
+    if(!missionTrackerEl) return;
+    missionTrackerEl.innerHTML=activeMissions.map(function(m){
+      var pct=clamp(m.progress/m.target*100,0,100);
+      return '<div class="mission-row '+(m.done?'done':'')+'"><div class="top"><span>'+escapeHTML(t(m.key,{n:m.target}))+'</span><span>★'+m.reward+'</span></div><div class="bar"><span style="width:'+pct+'%"></span></div></div>';
+    }).join("");
+  }
+  function syncSettingsControls(){
+    languageSelect.value=settings.language;
+    playerNameInput.value=settings.playerName||"Pilot";
+    graphicsSelect.value=settings.graphics;
+    controlSelect.value=settings.controls;
+    soundToggle.checked=settings.sound!==false;
+    motionToggle.checked=!!settings.reducedMotion;
+    immortalToggle.checked=!!settings.immortalMode;
+  }
+  function applyLocalization(){
+    clearHUDCache();
+    var lang=I18N[settings.language]?settings.language:"en";
+    document.documentElement.lang=lang;
+    document.getElementById("menuSubtitle").textContent=t("menuSubtitle");
+    startBtn.textContent=t("start");
+    leaderboardBtn.textContent=t("leaderboard");
+    shopBtn.textContent=t("shop");
+    settingsBtn.textContent=t("settings");
+    document.getElementById("overviewTitle").textContent=t("overview");
+    document.getElementById("menuBestLabel").textContent=t("bestRun");
+    document.getElementById("menuGamesLabel").textContent=t("gamesPlayed");
+    document.getElementById("menuAchievementsLabel").textContent=t("achievements");
+    document.getElementById("menuControlsText").textContent=t("controlsIntro");
+    document.getElementById("languageLabel").textContent=t("language");
+    document.getElementById("playerNameLabel").textContent=t("playerName");
+    document.getElementById("graphicsLabel").textContent=t("graphics");
+    document.getElementById("controlLabel").textContent=t("controls");
+    document.getElementById("soundLabel").textContent=t("sound");
+    document.getElementById("motionLabel").textContent=t("reducedMotion");
+    document.getElementById("immortalLabel").textContent=t("immortalMode");
+    document.getElementById("immortalNote").textContent=t("immortalNote");
+    document.getElementById("scoreLabel").textContent=t("score");
+    document.getElementById("bestLabel").textContent=t("best");
+    document.getElementById("livesLabel").textContent=t("lives");
+    document.getElementById("coinsLabel").textContent=t("coins");
+    document.getElementById("comboLabel").textContent=t("combo");
+    document.getElementById("speedLabel").textContent=t("speed");
+    document.getElementById("stageLabel").textContent=t("stage");
+    document.getElementById("powerupLabel").textContent=t("powerup");
+    cityPrefixEl.textContent=t("flyingOver");
+    balanceLabelEl.textContent=t("balance");
+    helpEl.textContent=t("help");
+    pauseBtn.title=t("pause"); pauseBtn.setAttribute("aria-label",t("pause"));
+    muteBtn.title=settings.sound===false?t("unmute"):t("mute");
+    muteBtn.setAttribute("aria-label",muteBtn.title);
+    fullscreenBtn.title=t("fullscreen"); fullscreenBtn.setAttribute("aria-label",t("fullscreen"));
+    if(shootTouchBtn){ shootTouchBtn.title=t("shoot"); shootTouchBtn.setAttribute("aria-label",t("shoot")); }
+    resumeBtn.textContent=t("resume"); restartBtn.textContent=t("restart");
+    menuBtn.textContent=t("mainMenu"); reviveBtn.textContent=t("reviveBtn",{cost:REVIVE_COST});
+    runSummaryLabelEl.textContent=t("runScore");
+    threeErrorTextEl.textContent=t("threeError");
+    reloadBtn.textContent=t("reload");
+    graphicsSelect.options[0].textContent=t("graphicsLow");
+    graphicsSelect.options[1].textContent=t("graphicsMedium");
+    graphicsSelect.options[2].textContent=t("graphicsHigh");
+    controlSelect.options[0].textContent=t("controlsHybrid");
+    controlSelect.options[1].textContent=t("controlsPointer");
+    controlSelect.options[2].textContent=t("controlsKeyboard");
+    stageNameEl.textContent=t(STAGE_KEYS[currentStage]||"stageSunny");
+    sidePanelTitleEl.textContent=currentSidePanel==="settings"?t("settings"):(currentSidePanel==="shop"?t("shop"):t("leaderboard"));
+    renderLeaderboard(); renderShop(); renderMenuStats(); syncSettingsControls();
+  }
+
+  // ═══════════════════════════════════════════
+  // GRAPHICS QUALITY
+  // ═══════════════════════════════════════════
+  function getQualityConfig(){
+    if(settings.graphics==="low") return{pixelRatioCap:1,antialias:false,shadowSize:512,stars:800,clouds:12,trees:50,flowers:32,cities:6,buildingMin:6,buildingRange:6,weatherParticles:380,exhaustParticles:38,forestUpdateInterval:5,cityUpdateInterval:14};
+    if(settings.graphics==="medium") return{pixelRatioCap:1.4,antialias:true,shadowSize:768,stars:1100,clouds:17,trees:75,flowers:60,cities:8,buildingMin:8,buildingRange:8,weatherParticles:680,exhaustParticles:58,forestUpdateInterval:3,cityUpdateInterval:9};
+    return{pixelRatioCap:1.7,antialias:true,shadowSize:1024,stars:1500,clouds:22,trees:100,flowers:88,cities:10,buildingMin:9,buildingRange:10,weatherParticles:920,exhaustParticles:74,forestUpdateInterval:2,cityUpdateInterval:6};
+  }
+  function applyGraphicsSettings(){
+    if(!renderer) return;
+    var q=getQualityConfig();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,q.pixelRatioCap));
+    renderer.shadowMap.enabled=settings.graphics!=="low";
+    if(shadowLight&&shadowLight.shadow&&shadowLight.shadow.mapSize){
+      shadowLight.shadow.mapSize.width=q.shadowSize;
+      shadowLight.shadow.mapSize.height=q.shadowSize;
+    }
+    if(weatherParticles) weatherParticles.material.opacity=settings.graphics==="low"?0.42:0.82;
+    handleWindowResize();
+  }
+  function getBaseGameSpeed(){ return Math.min(3.9,1.08+score*0.0046+currentStage*0.12); }
+  function getGameSpeed(){ var slowF=(activeEffects.slow>0||activeEffects.timeWarp>0||bulletTimeTimer>0)?0.62:1; var boostF=activeEffects.boost>0?1.32:1; return getBaseGameSpeed()*slowF*boostF; }
+  function getMotionScale(){ return settings.reducedMotion?0.45:1; }
+
+  function getActivePowerupText(){
+    var labels=[];
+    if(settings.immortalMode) labels.push(t("immortalHud"));
+    if(bulletTimeTimer>0) labels.push(t("bulletTime")+" "+Math.ceil(bulletTimeTimer)+"s");
+    powerupTypes.forEach(function(type){
+      if(activeEffects[type]>0) labels.push(t(POWERUP_KEYS[type])+" "+Math.ceil(activeEffects[type])+"s");
+    });
+    return labels.join(" / ");
+  }
+  function formatStageName(stage){ return t(STAGE_KEYS[stage]||"stageSunny"); }
+
+  // ═══════════════════════════════════════════
+  // SCENE CREATION
+  // ═══════════════════════════════════════════
+  var HEIGHT,WIDTH;
+  function createScene(){
+    HEIGHT=window.innerHeight; WIDTH=window.innerWidth;
+    scene=new THREE.Scene();
+    scene.fog=new THREE.FogExp2(0x000000,0.0006);
+    camera=new THREE.PerspectiveCamera(60,WIDTH/HEIGHT,1,10000);
+    camera.position.set(0,150,100);
+    renderer=new THREE.WebGLRenderer({alpha:true,antialias:getQualityConfig().antialias,powerPreference:"high-performance"});
+    renderer.setClearColor(0x000000,0);
+    renderer.setSize(WIDTH,HEIGHT);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,getQualityConfig().pixelRatioCap));
+    renderer.shadowMap.enabled=settings.graphics!=="low";
+    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    container=document.getElementById("world");
+    container.appendChild(renderer.domElement);
+    window.addEventListener("resize",handleWindowResize,false);
+  }
+  function handleWindowResize(){
+    HEIGHT=window.innerHeight; WIDTH=window.innerWidth;
+    renderer.setSize(WIDTH,HEIGHT);
+    camera.aspect=WIDTH/HEIGHT;
+    camera.updateProjectionMatrix();
+  }
+  function createLights(){
+    hemisphereLight=new THREE.HemisphereLight(0xddeeff,0x1d2f1d,0.85);
+    shadowLight=new THREE.DirectionalLight(0xfff4dc,1.35);
+    shadowLight.position.set(-220,520,480);
+    shadowLight.castShadow=true;
+    shadowLight.shadow.camera.left=-700; shadowLight.shadow.camera.right=700;
+    shadowLight.shadow.camera.top=700; shadowLight.shadow.camera.bottom=-700;
+    shadowLight.shadow.camera.near=1; shadowLight.shadow.camera.far=1200;
+    var q=getQualityConfig();
+    shadowLight.shadow.mapSize.width=q.shadowSize; shadowLight.shadow.mapSize.height=q.shadowSize;
+    shadowLight.shadow.bias=-0.0001;
+    scene.add(hemisphereLight); scene.add(shadowLight);
+    scene.add(new THREE.AmbientLight(0x2b3440,0.35));
+    var rimLight=new THREE.DirectionalLight(0x9fd8ff,0.45);
+    rimLight.position.set(420,180,-520);
+    scene.add(rimLight);
+  }
+
+  // ═══════════════════════════════════════════
+  // SCENE OBJECTS (using BufferGeometry where possible)
+  // ═══════════════════════════════════════════
+  function Land(){
+    var geom=new THREE.CylinderGeometry(3000,3000,4000,40,10);
+    // Displace vertices for low-poly look
+    var pos=geom.attributes.position;
+    for(var i=0;i<pos.count;i++){
+      pos.setX(i,pos.getX(i)+(-15+Math.random()*30));
+      pos.setY(i,pos.getY(i)+(-15+Math.random()*30));
+      pos.setZ(i,pos.getZ(i)+(-15+Math.random()*30));
+    }
+    pos.needsUpdate=true; geom.computeVertexNormals();
+    var mat=new THREE.MeshStandardMaterial({color:0x2f9b4b,roughness:0.96,metalness:0.02,flatShading:true});
+    this.mesh=new THREE.Mesh(geom,mat);
+    this.mesh.rotation.x=-Math.PI/2;
+    this.mesh.receiveShadow=true;
+  }
+  function Orbit(){ this.mesh=new THREE.Object3D(); }
+  function Sun(){
+    this.mesh=new THREE.Object3D();
+    var sunMesh=new THREE.Mesh(new THREE.SphereGeometry(400,32,32),new THREE.MeshBasicMaterial({color:0xfff4c6}));
+    var aura=new THREE.Mesh(new THREE.SphereGeometry(490,32,32),new THREE.MeshBasicMaterial({color:0xffbb55,transparent:true,opacity:0.32}));
+    var aura2=new THREE.Mesh(new THREE.SphereGeometry(610,32,32),new THREE.MeshBasicMaterial({color:0xff5500,transparent:true,opacity:0.14}));
+    this.mesh.add(sunMesh); this.mesh.add(aura); this.mesh.add(aura2);
+  }
+  function Stars(){
+    this.mesh=new THREE.Object3D();
+    var q=getQualityConfig();
+    var count=Math.max(q.stars,3500);
+
+    // ── Layer 1: medium bright stars — varied colors like real sky ──
+    var pos1=new Float32Array(count*3);
+    var col1=new Float32Array(count*3);
+    for(var i=0;i<count;i++){
+      pos1[i*3]=(Math.random()-0.5)*22000;
+      pos1[i*3+1]=(Math.random()-0.5)*22000;
+      pos1[i*3+2]=Math.random()*-18000-800;
+      var t=Math.random();
+      if(t<0.5){  col1[i*3]=1;    col1[i*3+1]=1;    col1[i*3+2]=1;    } // pure white
+      else if(t<0.65){ col1[i*3]=0.78; col1[i*3+1]=0.88; col1[i*3+2]=1; } // blue-white
+      else if(t<0.78){ col1[i*3]=1;    col1[i*3+1]=0.96; col1[i*3+2]=0.7; } // warm yellow
+      else if(t<0.88){ col1[i*3]=1;    col1[i*3+1]=0.7;  col1[i*3+2]=0.5; } // orange
+      else{            col1[i*3]=0.65; col1[i*3+1]=0.78; col1[i*3+2]=1; }   // blue
+    }
+    var geom1=new THREE.BufferGeometry();
+    geom1.setAttribute("position",new THREE.BufferAttribute(pos1,3));
+    geom1.setAttribute("color",new THREE.BufferAttribute(col1,3));
+    var mat1=new THREE.PointsMaterial({vertexColors:true,size:7,sizeAttenuation:true,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+    this.points=new THREE.Points(geom1,mat1);
+    this.mesh.add(this.points);
+
+    // ── Layer 2: MASSIVE tiny star field — like the Milky Way ──
+    var count2=Math.round(count*5);
+    var pos2=new Float32Array(count2*3);
+    var col2=new Float32Array(count2*3);
+    for(var j=0;j<count2;j++){
+      pos2[j*3]=(Math.random()-0.5)*28000;
+      pos2[j*3+1]=(Math.random()-0.5)*28000;
+      pos2[j*3+2]=Math.random()*-20000-1500;
+      var brightness=0.55+Math.random()*0.45;
+      var tint=Math.random();
+      if(tint<0.6){ col2[j*3]=brightness;col2[j*3+1]=brightness;col2[j*3+2]=brightness; }
+      else if(tint<0.8){ col2[j*3]=brightness*0.8;col2[j*3+1]=brightness*0.88;col2[j*3+2]=brightness; }
+      else{ col2[j*3]=brightness;col2[j*3+1]=brightness*0.9;col2[j*3+2]=brightness*0.7; }
+    }
+    var geom2=new THREE.BufferGeometry();
+    geom2.setAttribute("position",new THREE.BufferAttribute(pos2,3));
+    geom2.setAttribute("color",new THREE.BufferAttribute(col2,3));
+    var mat2=new THREE.PointsMaterial({vertexColors:true,size:1.8,sizeAttenuation:true,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+    this.points2=new THREE.Points(geom2,mat2);
+    this.mesh.add(this.points2);
+
+    // ── Layer 3: hero "giant" stars — large, bright, twinkling ──
+    var heroCount=120;
+    var pos3=new Float32Array(heroCount*3);
+    var col3=new Float32Array(heroCount*3);
+    for(var k=0;k<heroCount;k++){
+      pos3[k*3]=(Math.random()-0.5)*15000;
+      pos3[k*3+1]=(Math.random()-0.5)*15000;
+      pos3[k*3+2]=Math.random()*-12000-500;
+      var t3=Math.random();
+      if(t3<0.35){ col3[k*3]=1;col3[k*3+1]=1;col3[k*3+2]=0.92; }
+      else if(t3<0.6){ col3[k*3]=0.7;col3[k*3+1]=0.86;col3[k*3+2]=1; }
+      else if(t3<0.8){ col3[k*3]=1;col3[k*3+1]=0.88;col3[k*3+2]=0.65; }
+      else{ col3[k*3]=1;col3[k*3+1]=0.55;col3[k*3+2]=0.4; } // red giant
+    }
+    var geom3=new THREE.BufferGeometry();
+    geom3.setAttribute("position",new THREE.BufferAttribute(pos3,3));
+    geom3.setAttribute("color",new THREE.BufferAttribute(col3,3));
+    var mat3=new THREE.PointsMaterial({vertexColors:true,size:20,sizeAttenuation:true,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+    this.heroPoints=new THREE.Points(geom3,mat3);
+    this.mesh.add(this.heroPoints);
+
+    // ── Layer 4: ultra-fine dust stars — cosmic density ──
+    var count4=Math.round(count*8);
+    var pos4=new Float32Array(count4*3);
+    var col4=new Float32Array(count4*3);
+    for(var m=0;m<count4;m++){
+      pos4[m*3]=(Math.random()-0.5)*32000;
+      pos4[m*3+1]=(Math.random()-0.5)*32000;
+      pos4[m*3+2]=Math.random()*-24000-3000;
+      var b4=0.3+Math.random()*0.5;
+      col4[m*3]=b4; col4[m*3+1]=b4; col4[m*3+2]=b4*1.1;
+    }
+    var geom4=new THREE.BufferGeometry();
+    geom4.setAttribute("position",new THREE.BufferAttribute(pos4,3));
+    geom4.setAttribute("color",new THREE.BufferAttribute(col4,3));
+    var mat4=new THREE.PointsMaterial({vertexColors:true,size:1.0,sizeAttenuation:true,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+    this.dustPoints=new THREE.Points(geom4,mat4);
+    this.mesh.add(this.dustPoints);
+
+    // ── Layer 5: Milky Way band — dense cluster in a diagonal strip ──
+    var mwCount=Math.round(count*3);
+    var pos5=new Float32Array(mwCount*3);
+    var col5=new Float32Array(mwCount*3);
+    for(var n=0;n<mwCount;n++){
+      // Gaussian-like band across the sky (diagonal strip)
+      var bandX=(Math.random()-0.5)*30000;
+      var bandY=bandX*0.25+(Math.random()-0.5)*5000; // diagonal band
+      pos5[n*3]=bandX;
+      pos5[n*3+1]=bandY;
+      pos5[n*3+2]=Math.random()*-22000-4000;
+      var b5=0.2+Math.random()*0.4;
+      // Milky Way has blue-white and warm tints
+      var mwT=Math.random();
+      if(mwT<0.5){ col5[n*3]=b5*0.85;col5[n*3+1]=b5*0.92;col5[n*3+2]=b5; }
+      else{ col5[n*3]=b5;col5[n*3+1]=b5*0.95;col5[n*3+2]=b5*0.8; }
+    }
+    var geom5=new THREE.BufferGeometry();
+    geom5.setAttribute("position",new THREE.BufferAttribute(pos5,3));
+    geom5.setAttribute("color",new THREE.BufferAttribute(col5,3));
+    var mat5=new THREE.PointsMaterial({vertexColors:true,size:1.3,sizeAttenuation:true,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+    this.milkyPoints=new THREE.Points(geom5,mat5);
+    this.mesh.add(this.milkyPoints);
+
+    // ── Layer 6: colorful nebula specks — pinks/purples/teals ──
+    var nebCount=Math.round(count*0.8);
+    var pos6=new Float32Array(nebCount*3);
+    var col6=new Float32Array(nebCount*3);
+    var nebColors=[[1,0.4,0.8],[0.6,0.3,1],[0.3,0.9,1],[1,0.6,0.3],[0.5,1,0.6]];
+    for(var p6=0;p6<nebCount;p6++){
+      pos6[p6*3]=(Math.random()-0.5)*18000;
+      pos6[p6*3+1]=(Math.random()-0.5)*18000;
+      pos6[p6*3+2]=Math.random()*-15000-2000;
+      var nc=nebColors[Math.floor(Math.random()*nebColors.length)];
+      var nbi=0.25+Math.random()*0.45;
+      col6[p6*3]=nc[0]*nbi; col6[p6*3+1]=nc[1]*nbi; col6[p6*3+2]=nc[2]*nbi;
+    }
+    var geom6=new THREE.BufferGeometry();
+    geom6.setAttribute("position",new THREE.BufferAttribute(pos6,3));
+    geom6.setAttribute("color",new THREE.BufferAttribute(col6,3));
+    var mat6=new THREE.PointsMaterial({vertexColors:true,size:2.5,sizeAttenuation:true,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+    this.nebulaPoints=new THREE.Points(geom6,mat6);
+    this.mesh.add(this.nebulaPoints);
+
+    // Twinkling state
+    this._twinkleTime=0;
+    this._twinkleOffsets=new Float32Array(count).map(function(){ return Math.random()*Math.PI*2; });
+    this._heroOffsets=new Float32Array(heroCount).map(function(){ return Math.random()*Math.PI*2; });
+  }
+  function SolarSystem(){
+    this.mesh=new THREE.Object3D(); this.planets=[]; this.orbitGroups=[];
+    var self=this;
+
+    // ── Planet factory ──
+    function makePlanet(radius,colorHex,roughness,emissive,emissiveInt){
+      var segs=Math.max(32,Math.round(radius*0.5));
+      var geom=new THREE.SphereGeometry(radius,segs,segs);
+      var mat=new THREE.MeshStandardMaterial({
+        color:colorHex,roughness:roughness||0.7,metalness:0.05,
+        emissive:emissive||0x000000,emissiveIntensity:emissiveInt||0
+      });
+      return new THREE.Mesh(geom,mat);
+    }
+    function makeRing(innerR,outerR,col,opacity){
+      var rg=new THREE.TorusGeometry((innerR+outerR)/2,(outerR-innerR)/2,2,64);
+      var rm=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:opacity,side:THREE.DoubleSide});
+      return new THREE.Mesh(rg,rm);
+    }
+    function addPlanet(p,x,y,z){
+      p.position.set(x,y,z);
+      self.mesh.add(p);
+      self.planets.push(p);
+    }
+
+    // ── Sun — far upper-right, big, luminous (anchor of the solar system) ──
+    var sunGroup=new THREE.Object3D();
+    var sunCore=new THREE.Mesh(new THREE.SphereGeometry(200,48,48),new THREE.MeshBasicMaterial({color:0xfffde7}));
+    var sunC1=new THREE.Mesh(new THREE.SphereGeometry(240,48,48),new THREE.MeshBasicMaterial({color:0xffeb3b,transparent:true,opacity:0.55}));
+    var sunC2=new THREE.Mesh(new THREE.SphereGeometry(300,48,48),new THREE.MeshBasicMaterial({color:0xff9800,transparent:true,opacity:0.3}));
+    var sunC3=new THREE.Mesh(new THREE.SphereGeometry(400,48,48),new THREE.MeshBasicMaterial({color:0xff4500,transparent:true,opacity:0.12}));
+    var sunC4=new THREE.Mesh(new THREE.SphereGeometry(540,48,48),new THREE.MeshBasicMaterial({color:0xff6600,transparent:true,opacity:0.05}));
+    sunGroup.add(sunCore); sunGroup.add(sunC1); sunGroup.add(sunC2); sunGroup.add(sunC3); sunGroup.add(sunC4);
+    var sunLight=new THREE.PointLight(0xfff8e1,4.5,8000);
+    sunGroup.add(sunLight);
+    // Sun positioned top-right — all planets spread out from it left/down
+    sunGroup.position.set(900,500,-800);
+    this.sunGroup=sunGroup; this.sunCore=sunCore; this.sunCorona1=sunC1; this.sunCorona2=sunC2;
+    this.mesh.add(sunGroup);
+
+    // Solar system planets arranged in order from Sun (upper-right) outward to lower-left
+    // Real order: Mercury, Venus, Earth, Mars | belt | Jupiter, Saturn, Uranus, Neptune
+    // Positions form an arc sweeping from near the sun (upper-right) toward lower-left
+
+    // ── 1. Mercury — tiny grey, very close to sun ──
+    var mercury=makePlanet(18,0x9e9e9e,0.95,0x333333,0.02);
+    // close to sun, upper right area
+    addPlanet(mercury,620,330,-550);
+
+    // ── 2. Venus — yellowish, slightly larger, next out ──
+    var venus=makePlanet(44,0xe8c87a,0.62,0xd4a435,0.06);
+    // Venus: hotter-looking, a bit further left and down
+    addPlanet(venus,420,200,-480);
+    // Add thick cloud layer on Venus
+    var venusClouds=new THREE.Mesh(new THREE.SphereGeometry(50,28,28),new THREE.MeshBasicMaterial({color:0xf5dfa0,transparent:true,opacity:0.4}));
+    venus.add(venusClouds); this.venusClouds=venusClouds;
+
+    // ── 3. Earth + Moon ──
+    var earthGroup=new THREE.Object3D();
+    var earthMesh=makePlanet(52,0x2563a8,0.55,0x112244,0.05);
+    // Green continents painted as patches
+    var continentMat=new THREE.MeshBasicMaterial({color:0x228b22,transparent:true,opacity:0.55});
+    var c1=new THREE.Mesh(new THREE.SphereGeometry(54,8,8),continentMat); c1.scale.set(0.28,0.35,0.22); c1.position.set(40,10,28); earthGroup.add(c1);
+    var c2=new THREE.Mesh(new THREE.SphereGeometry(54,8,8),continentMat); c2.scale.set(0.18,0.3,0.15); c2.position.set(-38,-8,32); earthGroup.add(c2);
+    var earthClouds=new THREE.Mesh(new THREE.SphereGeometry(57,32,32),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.22}));
+    earthGroup.add(earthMesh); earthGroup.add(earthClouds);
+    // Moon — small, grey, orbiting Earth
+    var moonMesh=new THREE.Mesh(new THREE.SphereGeometry(14,16,16),new THREE.MeshStandardMaterial({color:0xbbbbbb,roughness:0.95,metalness:0.0}));
+    moonMesh.position.set(90,30,0); earthGroup.add(moonMesh); this.moonMesh=moonMesh;
+    earthGroup.position.set(180,40,-420);
+    this.mesh.add(earthGroup); this.planets.push(earthGroup);
+    this.earthClouds=earthClouds; this.earthGroup=earthGroup;
+
+    // ── 4. Mars — red planet, further left ──
+    var mars=makePlanet(34,0xc1440e,0.82,0x6b1e04,0.04);
+    // Polar ice caps
+    var marsIce=new THREE.Mesh(new THREE.SphereGeometry(36,8,8),new THREE.MeshBasicMaterial({color:0xfff5ee,transparent:true,opacity:0.7}));
+    marsIce.scale.set(0.5,0.18,0.5); marsIce.position.y=34; mars.add(marsIce);
+    addPlanet(mars,-80,-20,-400);
+
+    // ── Asteroid belt (between Mars and Jupiter) — small rocks ──
+    var beltGroup=new THREE.Object3D();
+    var beltMat=new THREE.MeshStandardMaterial({color:0x6e5a42,roughness:0.9,metalness:0.1,flatShading:true});
+    for(var bi=0;bi<22;bi++){
+      var ang=bi/22*Math.PI*2;
+      var beltR=220+Math.random()*60;
+      var bSize=2+Math.random()*7;
+      var bRock=new THREE.Mesh(new THREE.IcosahedronGeometry(bSize,0),beltMat);
+      bRock.position.set(Math.cos(ang)*beltR*0.5-300,Math.sin(ang)*beltR*0.35-80,-380-Math.random()*60);
+      bRock.rotation.set(Math.random()*6,Math.random()*6,Math.random()*6);
+      beltGroup.add(bRock);
+    }
+    this.mesh.add(beltGroup); this.beltGroup=beltGroup;
+
+    // ── 5. Jupiter — king planet, large, with bands, much further ──
+    var jupiterGroup=new THREE.Object3D();
+    var jupiterBase=makePlanet(120,0xc88b3a,0.55,0x8b5e1a,0.03);
+    [0xd4a96a,0xb87333,0xe8c8a0,0xa0522d,0xdeb887].forEach(function(c,idx){
+      var band=new THREE.Mesh(
+        new THREE.TorusGeometry(108,6,2,48),
+        new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:0.38+idx*0.04,side:THREE.DoubleSide})
+      );
+      band.rotation.x=Math.PI/2; band.position.y=(idx-2)*20;
+      jupiterGroup.add(band);
+    });
+    // Great Red Spot
+    var grs=new THREE.Mesh(new THREE.SphereGeometry(20,16,16),new THREE.MeshBasicMaterial({color:0xcc3300,transparent:true,opacity:0.8}));
+    grs.position.set(96,28,40); jupiterGroup.add(jupiterBase); jupiterGroup.add(grs);
+    jupiterGroup.position.set(-340,-100,-520);
+    this.mesh.add(jupiterGroup); this.planets.push(jupiterGroup); this.jupiterGroup=jupiterGroup;
+
+    // ── 6. Saturn — iconic rings, further left-down ──
+    var saturnGroup=new THREE.Object3D();
+    var saturnBase=makePlanet(88,0xe8d5a3,0.6,0xc4a85a,0.03);
+    saturnGroup.add(saturnBase);
+    [{i:108,o:152,c:0xc4a97a,op:0.72},{i:155,o:180,c:0xd4b88a,op:0.52},{i:183,o:206,c:0xb8a070,op:0.32},{i:98,o:106,c:0x886644,op:0.42}].forEach(function(rd){
+      var rMesh=makeRing(rd.i,rd.o,rd.c,rd.op);
+      rMesh.rotation.x=Math.PI/2+0.35; saturnGroup.add(rMesh);
+    });
+    saturnGroup.rotation.z=0.15;
+    saturnGroup.position.set(-560,-220,-600);
+    this.mesh.add(saturnGroup); this.planets.push(saturnGroup); this.saturnGroup=saturnGroup;
+
+    // ── 7. Uranus — ice giant, tilted rings, far lower ──
+    var uranusGroup=new THREE.Object3D();
+    var uranusMesh=makePlanet(60,0x7de8e8,0.45,0x4fb5b5,0.08);
+    uranusGroup.add(uranusMesh);
+    [76,90,102].forEach(function(r){
+      var uR=new THREE.Mesh(new THREE.TorusGeometry(r,2.5,2,48),new THREE.MeshBasicMaterial({color:0x9fd8d8,transparent:true,opacity:0.38,side:THREE.DoubleSide}));
+      uR.rotation.y=Math.PI/2; uranusGroup.add(uR);
+    });
+    // Uranus has unique 98° axial tilt (rings go sideways)
+    uranusGroup.rotation.z=Math.PI/2;
+    uranusGroup.position.set(-750,-300,-680);
+    this.mesh.add(uranusGroup); this.planets.push(uranusGroup); this.uranusGroup=uranusGroup;
+
+    // ── 8. Neptune — deep blue, furthest, leftmost ──
+    var neptune=makePlanet(58,0x1a4eb5,0.5,0x0d2d80,0.1);
+    // Neptune has faint dark rings
+    var nepRing=new THREE.Mesh(new THREE.TorusGeometry(82,2,2,48),new THREE.MeshBasicMaterial({color:0x2255cc,transparent:true,opacity:0.28,side:THREE.DoubleSide}));
+    nepRing.rotation.x=Math.PI/2+0.15; neptune.add(nepRing);
+    addPlanet(neptune,-950,-380,-750);
+
+    // ── Lighting ──
+    var spaceAmb=new THREE.AmbientLight(0x1a2040,1.4);
+    this.mesh.add(spaceAmb);
+
+    // Start hidden below scene
+    this.mesh.position.set(0,-2500,0);
+    this.mesh.visible=false;
+    this._time=0;
+  }
+  function Cloud(){
+    this.mesh=new THREE.Object3D();
+    var geom=new THREE.DodecahedronGeometry(20,0);
+    var mat=new THREE.MeshStandardMaterial({color:0xf5f7fb,roughness:0.82,transparent:true,opacity:0.94,flatShading:true});
+    for(var i=0;i<(3+Math.floor(Math.random()*3));i++){
+      var m=new THREE.Mesh(geom,mat);
+      m.position.set(i*15,Math.random()*10,Math.random()*10);
+      m.rotation.set(Math.random()*Math.PI*2,Math.random()*Math.PI*2,Math.random()*Math.PI*2);
+      var s=0.1+Math.random()*0.9; m.scale.set(s,s,s);
+      this.mesh.add(m);
+    }
+  }
+  function Sky(){
+    this.mesh=new THREE.Object3D();
+    this.nClouds=getQualityConfig().clouds;
+    var step=Math.PI*2/this.nClouds;
+    for(var i=0;i<this.nClouds;i++){
+      var c=new Cloud(); var a=step*i; var h=3200+Math.random()*200;
+      c.mesh.position.set(Math.cos(a)*h,Math.sin(a)*h,-400-Math.random()*400);
+      c.mesh.rotation.z=a+Math.PI/2;
+      var s=1+Math.random()*2; c.mesh.scale.set(s,s,s);
+      this.mesh.add(c.mesh);
+    }
+  }
+  function Tree(){
+    this.mesh=new THREE.Object3D();
+    var trunkMat=new THREE.MeshStandardMaterial({color:0x5d4037,roughness:0.9,flatShading:true});
+    var leavesMat=new THREE.MeshStandardMaterial({color:0x2e7d32,roughness:0.8,flatShading:true});
+    var leavesMat2=new THREE.MeshStandardMaterial({color:0x4caf50,roughness:0.8,flatShading:true});
+    var trunk=new THREE.Mesh(new THREE.CylinderGeometry(4,6,25,5),trunkMat);
+    trunk.position.y=12.5; trunk.castShadow=true; this.mesh.add(trunk);
+    this.canopy=new THREE.Object3D();
+    var l1=new THREE.Mesh(new THREE.IcosahedronGeometry(15,0),leavesMat); l1.position.y=30; l1.castShadow=true; this.canopy.add(l1);
+    var l2=new THREE.Mesh(new THREE.IcosahedronGeometry(12,0),leavesMat2); l2.position.set(-8,25,8); l2.castShadow=true; this.canopy.add(l2);
+    var l3=new THREE.Mesh(new THREE.IcosahedronGeometry(10,0),leavesMat2); l3.position.set(8,28,-5); l3.castShadow=true; this.canopy.add(l3);
+    this.mesh.add(this.canopy);
+    var snowMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.9,flatShading:true});
+    this.snowCap=new THREE.Mesh(new THREE.IcosahedronGeometry(8,0),snowMat);
+    this.snowCap.position.y=40; this.canopy.add(this.snowCap);
+    this.baseScale=0.3+Math.random()*0.75;
+    this.mesh.scale.set(this.baseScale,this.baseScale,this.baseScale);
+    this.swaySpeed=0.002+Math.random()*0.002;
+    this.swayOffset=Math.random()*Math.PI*2;
+  }
+  function City(){ this.mesh=new THREE.Object3D(); this.style="AMERICAN"; }
+  City.prototype.build=function(style){
+    this.style=style;
+    while(this.mesh.children.length>0) this.mesh.remove(this.mesh.children[0]);
+    var q=getQualityConfig();
+    var nBuildings=q.buildingMin+Math.floor(Math.random()*q.buildingRange);
+    var mat1,mat2;
+    var makeMesh=function(geom,mat,shadow){ var m=new THREE.Mesh(geom,mat); m.castShadow=shadow; m.receiveShadow=true; return m; };
+    if(style==="AMERICAN"){
+      mat1=new THREE.MeshStandardMaterial({color:0x223344,roughness:0.2,metalness:0.8});
+      mat2=new THREE.MeshStandardMaterial({color:0x445566,roughness:0.3,metalness:0.7});
+      for(var i=0;i<nBuildings;i++){
+        var h=40+Math.random()*80; var w=15+Math.random()*15;
+        var b=makeMesh(new THREE.BoxGeometry(w,h,w),Math.random()>0.5?mat1:mat2,true);
+        b.position.set(rand(-120,120),h/2,rand(-80,80)); this.mesh.add(b);
+      }
+    } else if(style==="ASIAN"){
+      mat1=new THREE.MeshStandardMaterial({color:0xaa2222,roughness:0.7});
+      mat2=new THREE.MeshStandardMaterial({color:0x222222,roughness:0.9});
+      for(var i=0;i<nBuildings;i++){
+        var h=20+Math.random()*40; var w=15+Math.random()*10;
+        var b=makeMesh(new THREE.BoxGeometry(w,h,w),mat1,true);
+        b.position.set(rand(-120,120),h/2,rand(-80,80));
+        var roof=new THREE.Mesh(new THREE.ConeGeometry(w*1.2,10,4),mat2);
+        roof.position.y=h/2+5; roof.rotation.y=Math.PI/4; b.add(roof);
+        this.mesh.add(b);
+      }
+    } else if(style==="RUSSIAN"){
+      mat1=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.9});
+      var colors=[0xff0000,0x00ff00,0x0000ff,0xffaa00];
+      for(var i=0;i<nBuildings;i++){
+        var h=20+Math.random()*30; var w=15+Math.random()*10;
+        var b=makeMesh(new THREE.BoxGeometry(w,h,w),mat1,true);
+        b.position.set(rand(-120,120),h/2,rand(-80,80));
+        var domeMat=new THREE.MeshStandardMaterial({color:colors[Math.floor(Math.random()*4)],roughness:0.5});
+        var dome=new THREE.Mesh(new THREE.SphereGeometry(w*0.6,8,8),domeMat);
+        dome.position.y=h/2+w*0.4; dome.scale.y=1.5; b.add(dome);
+        this.mesh.add(b);
+      }
+    } else if(style==="MIDDLE_EASTERN"){
+      mat1=new THREE.MeshStandardMaterial({color:0xeeddaa,roughness:0.9});
+      for(var i=0;i<nBuildings;i++){
+        if(Math.random()>0.8){
+          var w=40+Math.random()*40;
+          var b=makeMesh(new THREE.ConeGeometry(w,w*0.8,4),mat1,true);
+          b.position.set(rand(-120,120),w*0.4,rand(-80,80)); b.rotation.y=Math.PI/4;
+        } else {
+          var h=10+Math.random()*20; var w=15+Math.random()*15;
+          var b=makeMesh(new THREE.BoxGeometry(w,h,w),mat1,true);
+          b.position.set(rand(-120,120),h/2,rand(-80,80));
+        }
+        this.mesh.add(b);
+      }
+    } else if(style==="MODERN"){
+      mat1=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.5});
+      for(var i=0;i<nBuildings;i++){
+        var h=30+Math.random()*50; var r=10+Math.random()*10;
+        var b=makeMesh(new THREE.CylinderGeometry(r,r,h,16),mat1,true);
+        b.position.set(rand(-120,120),h/2,rand(-80,80)); this.mesh.add(b);
+      }
+    } else {
+      mat1=new THREE.MeshStandardMaterial({color:0xddddcc,roughness:0.9});
+      mat2=new THREE.MeshStandardMaterial({color:0x883322,roughness:0.9});
+      for(var i=0;i<nBuildings;i++){
+        var h=20+Math.random()*20; var w=20+Math.random()*10;
+        var b=makeMesh(new THREE.BoxGeometry(w,h,w),mat1,true);
+        b.position.set(rand(-120,120),h/2,rand(-80,80));
+        var roof=new THREE.Mesh(new THREE.ConeGeometry(w*0.8,10,4),mat2);
+        roof.position.y=h/2+5; roof.rotation.y=Math.PI/4; b.add(roof);
+        this.mesh.add(b);
+      }
+    }
+    this.mesh.traverse(function(child){
+      if(child.isMesh){ child.castShadow=settings.graphics==="high"; child.receiveShadow=settings.graphics!=="low"; }
+    });
+  };
+  function Forest(){
+    this.mesh=new THREE.Object3D(); this.trees=[];
+    var nTrees=getQualityConfig().trees;
+    var stepAngle=Math.PI*2/nTrees;
+    for(var i=0;i<nTrees;i++){
+      var tree=new Tree(); this.trees.push(tree);
+      var a=stepAngle*i; var h=3005;
+      tree.mesh.position.set(Math.cos(a)*h,Math.sin(a)*h,-Math.random()*600);
+      tree.mesh.rotation.z=a+(Math.PI/2)*3;
+      tree.angle=a;
+      this.mesh.add(tree.mesh);
+    }
+    var nFlowers=getQualityConfig().flowers;
+    var stepF=Math.PI*2/nFlowers;
+    for(var j=0;j<nFlowers;j++){
+      var flower=new Flower(); var b=stepF*j; var hh=3005;
+      flower.mesh.position.set(Math.cos(b)*hh,Math.sin(b)*hh,-Math.random()*600);
+      flower.mesh.rotation.z=b+(Math.PI/2)*3;
+      var fs=0.1+Math.random()*0.3; flower.mesh.scale.set(fs,fs,fs);
+      this.mesh.add(flower.mesh);
+    }
+  }
+  function Flower(){
+    this.mesh=new THREE.Object3D();
+    var stemMat=new THREE.MeshPhongMaterial({color:0x458248,flatShading:true});
+    var stem=new THREE.Mesh(new THREE.BoxGeometry(5,50,5),stemMat); stem.position.y=25; this.mesh.add(stem);
+    var coreMat=new THREE.MeshPhongMaterial({color:0xedeb27,flatShading:true});
+    var core=new THREE.Mesh(new THREE.SphereGeometry(6,8,8),coreMat); core.position.y=50; this.mesh.add(core);
+    var petalColors=[0xf25346,0xedeb27,0x68c3c0];
+    var petalMat=new THREE.MeshBasicMaterial({color:petalColors[Math.floor(Math.random()*3)]});
+    for(var i=0;i<4;i++){
+      var petal=new THREE.Mesh(new THREE.BoxGeometry(15,20,3),petalMat);
+      var angle=i*Math.PI/2;
+      petal.position.set(Math.cos(angle)*12,50,Math.sin(angle)*12);
+      petal.rotation.z=angle; this.mesh.add(petal);
+    }
+  }
+  function AirPlane(){
+    this.mesh=new THREE.Object3D();
+    var mainMat=new THREE.MeshStandardMaterial({color:0xd9dde3,roughness:0.28,metalness:0.72,flatShading:true});
+    var darkMat=new THREE.MeshStandardMaterial({color:0x171b22,roughness:0.42,metalness:0.86,flatShading:true});
+    var stripeMat=new THREE.MeshStandardMaterial({color:0x2f80ff,roughness:0.35,metalness:0.35,flatShading:true});
+    var glassMat=new THREE.MeshStandardMaterial({color:0x88ccff,transparent:true,opacity:0.6,roughness:0.1,metalness:0.9,flatShading:true});
+    // Fuselage
+    var geomF=new THREE.CylinderGeometry(15,8,80,10); geomF.rotateZ(Math.PI/2);
+    var fuselage=new THREE.Mesh(geomF,mainMat); fuselage.castShadow=true; this.mesh.add(fuselage);
+    // Stripe
+    var stripe=new THREE.Mesh(new THREE.BoxGeometry(42,3,3),stripeMat); stripe.position.set(2,10,13); this.mesh.add(stripe);
+    var stripe2=stripe.clone(); stripe2.position.z=-13; this.mesh.add(stripe2);
+    // Nose
+    var geomN=new THREE.CylinderGeometry(2,15,20,10); geomN.rotateZ(Math.PI/2);
+    var nose=new THREE.Mesh(geomN,mainMat); nose.position.x=50; nose.castShadow=true; this.mesh.add(nose);
+    // Cockpit
+    var geomG=new THREE.CylinderGeometry(8,12,30,6); geomG.rotateZ(Math.PI/2);
+    var glass=new THREE.Mesh(geomG,glassMat); glass.position.set(15,10,0); this.mesh.add(glass);
+    // Wings
+    var geomW=new THREE.BoxGeometry(30,4,120);
+    var wing=new THREE.Mesh(geomW,mainMat); wing.position.set(-5,0,0); wing.rotation.y=Math.PI/8; wing.castShadow=true; this.mesh.add(wing);
+    var wingStripe=new THREE.Mesh(new THREE.BoxGeometry(20,5,98),stripeMat); wingStripe.position.set(-7,3,0); wingStripe.rotation.y=Math.PI/8; this.mesh.add(wingStripe);
+    // Tail
+    var tail=new THREE.Mesh(new THREE.BoxGeometry(25,25,4),mainMat); tail.position.set(-35,15,0); tail.rotation.z=-Math.PI/6; tail.castShadow=true; this.mesh.add(tail);
+    var stab=new THREE.Mesh(new THREE.BoxGeometry(15,2,40),mainMat); stab.position.set(-35,0,0); this.mesh.add(stab);
+    // Engines
+    var geomE=new THREE.CylinderGeometry(6,6,25,8); geomE.rotateZ(Math.PI/2);
+    var engineR=new THREE.Mesh(geomE,darkMat); engineR.position.set(-5,-5,30); this.mesh.add(engineR);
+    var engineL=engineR.clone(); engineL.position.set(-5,-5,-30); this.mesh.add(engineL);
+    // Afterburner glow (hidden by default)
+    this.afterburnerR=new THREE.Mesh(new THREE.SphereGeometry(5,8,8),new THREE.MeshBasicMaterial({color:0xff6600,transparent:true,opacity:0}));
+    this.afterburnerR.position.set(-17,-5,30); this.mesh.add(this.afterburnerR);
+    this.afterburnerL=this.afterburnerR.clone(); this.afterburnerL.position.set(-17,-5,-30); this.mesh.add(this.afterburnerL);
+    // Propeller
+    this.propeller=new THREE.Object3D();
+    var geomP=new THREE.CylinderGeometry(0,3,10,6); geomP.rotateZ(Math.PI/2);
+    this.propeller.add(new THREE.Mesh(geomP,darkMat));
+    var blade1=new THREE.Mesh(new THREE.BoxGeometry(1,40,4),darkMat); blade1.position.set(2,0,0); this.propeller.add(blade1);
+    var blade2=new THREE.Mesh(new THREE.BoxGeometry(1,4,40),darkMat); blade2.position.set(2,0,0); this.propeller.add(blade2);
+    this.propeller.position.set(60,0,0); this.mesh.add(this.propeller);
+  }
+
+  // ═══════════════════════════════════════════
+  // GAME OBJECTS
+  // ═══════════════════════════════════════════
+  var ringColors=[0xffd700,0xffb347,0x9fe8ff,0x8a2be2,0x5dffcb,0xff00ff];
+  var ringEmissives=[0x553300,0x553311,0x004455,0x330055,0x005544,0x550055];
+
+  function Ring(){
+    this.mesh=new THREE.Object3D();
+    var ringMat=new THREE.MeshStandardMaterial({color:0xffd84d,emissive:0x553300,roughness:0.22,metalness:0.85,flatShading:true});
+    var ringGeom=new THREE.TorusGeometry(18,5,8,16);
+    this.torus=new THREE.Mesh(ringGeom,ringMat); this.torus.castShadow=true; this.mesh.add(this.torus);
+    // Inner glow ring
+    var innerMat=new THREE.MeshBasicMaterial({color:0xffd84d,transparent:true,opacity:0.25});
+    var inner=new THREE.Mesh(new THREE.TorusGeometry(14,2,6,12),innerMat); this.mesh.add(inner);
+    var spark=new THREE.Mesh(new THREE.SphereGeometry(3,8,8),new THREE.MeshBasicMaterial({color:0xffffff}));
+    spark.position.x=22; this.mesh.add(spark);
+    this.collected=false;
+  }
+  function Obstacle(stage){
+    this.mesh=new THREE.Object3D(); this.type=stage!==undefined?stage:3;
+    if(this.type===0){
+      var bodyMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.8,flatShading:true});
+      var beakMat=new THREE.MeshStandardMaterial({color:0xffaa00,roughness:0.6,flatShading:true});
+      var body=new THREE.Mesh(new THREE.BoxGeometry(10,10,20),bodyMat);
+      var wing=new THREE.Mesh(new THREE.BoxGeometry(30,2,10),bodyMat); wing.position.y=5;
+      var beak=new THREE.Mesh(new THREE.BoxGeometry(4,4,10),beakMat); beak.position.z=15;
+      this.mesh.add(body); this.mesh.add(wing); this.mesh.add(beak);
+    } else if(this.type===1){
+      var iceMat=new THREE.MeshStandardMaterial({color:0x88ccff,transparent:true,opacity:0.8,roughness:0.2,metalness:0.1,flatShading:true});
+      this.mesh.add(new THREE.Mesh(new THREE.IcosahedronGeometry(15,0),iceMat));
+      var spike=new THREE.Mesh(new THREE.CylinderGeometry(0,5,25,4),iceMat); spike.position.y=10; this.mesh.add(spike);
+    } else if(this.type===2){
+      var cloudMat=new THREE.MeshStandardMaterial({color:0x444444,roughness:1.0,flatShading:true});
+      this.mesh.add(new THREE.Mesh(new THREE.DodecahedronGeometry(18,0),cloudMat));
+      var sparkMat=new THREE.MeshBasicMaterial({color:0xffff00});
+      var sp=new THREE.Mesh(new THREE.BoxGeometry(4,15,4),sparkMat); sp.position.y=-10; this.mesh.add(sp);
+    } else {
+      var rockMat=new THREE.MeshStandardMaterial({color:0x5a4335,roughness:0.86,metalness:0.18,flatShading:true});
+      var glowMat=new THREE.MeshBasicMaterial({color:0xff6b1a,transparent:true,opacity:0.2});
+      var flameMat=new THREE.MeshBasicMaterial({color:0xff9b33,transparent:true,opacity:0.34});
+      this.mesh.add(new THREE.Mesh(new THREE.IcosahedronGeometry(18,1),rockMat));
+      this.mesh.add(new THREE.Mesh(new THREE.IcosahedronGeometry(26,1),glowMat));
+      var trail=new THREE.Mesh(new THREE.ConeGeometry(14,54,8),flameMat);
+      trail.position.z=-38; trail.rotation.x=Math.PI/2; this.mesh.add(trail);
+    }
+  }
+
+  var POWERUP_COLORS={shield:0x41d6ff,magnet:0xff5c9a,slow:0x7df56d,boost:0xff9b33,score2x:0xffe066,timeWarp:0xe8f6ff,starPower:0xc084fc,extraLife:0xff5a7a};
+  function PowerUp(type){
+    this.mesh=new THREE.Object3D(); this.type=type||"shield"; this.collected=false;
+    var col=POWERUP_COLORS[this.type]||0x41d6ff;
+    var coreMat=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.4,roughness:0.35,metalness:0.35,flatShading:true});
+    var shellMat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.2,wireframe:true});
+    var core=new THREE.Mesh(new THREE.OctahedronGeometry(16,0),coreMat);
+    var shell=new THREE.Mesh(new THREE.TorusGeometry(24,2.5,6,18),shellMat);
+    shell.rotation.x=Math.PI/2;
+    this.mesh.add(core); this.mesh.add(shell);
+    this.core=core; this.shell=shell;
+    // Type label dot (point light to glow)
+    if(settings.graphics!=="low"){
+      var pl=new THREE.PointLight(col,1.2,80);
+      this.mesh.add(pl);
+    }
+  }
+  function Coin(){
+    this.mesh=new THREE.Object3D();
+    var mat=new THREE.MeshStandardMaterial({color:0xffce4a,emissive:0x6b4200,roughness:0.28,metalness:0.8,flatShading:true});
+    var coin=new THREE.Mesh(new THREE.CylinderGeometry(10,10,3,18),mat);
+    coin.rotation.x=Math.PI/2; coin.castShadow=true; this.mesh.add(coin);
+    var glow=new THREE.Mesh(new THREE.TorusGeometry(13,1.5,6,18),new THREE.MeshBasicMaterial({color:0xfff2a0,transparent:true,opacity:0.35}));
+    glow.rotation.x=Math.PI/2; this.mesh.add(glow);
+    this.coin=coin; this.glow=glow;
+  }
+  function Bullet(){
+    this.mesh=new THREE.Object3D();
+    var mat=new THREE.MeshBasicMaterial({color:0xfff2a0,transparent:true,opacity:0.95});
+    var core=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.2,28,8),mat);
+    core.rotation.x=Math.PI/2;
+    this.mesh.add(core);
+    var glow=new THREE.Mesh(new THREE.SphereGeometry(6,8,8),new THREE.MeshBasicMaterial({color:0xffd45a,transparent:true,opacity:0.38}));
+    glow.position.z=-10; this.mesh.add(glow);
+    this.active=false; this.life=0;
+    this.mesh.visible=false;
+  }
+  function Asteroid(){
+    this.mesh=new THREE.Object3D();
+    var rockMat=new THREE.MeshStandardMaterial({color:0x6d5440,roughness:0.92,metalness:0.12,flatShading:true});
+    var glowMat=new THREE.MeshBasicMaterial({color:0xff7a2e,transparent:true,opacity:0.12});
+    this.mesh.add(new THREE.Mesh(new THREE.IcosahedronGeometry(24,1),rockMat));
+    this.mesh.add(new THREE.Mesh(new THREE.IcosahedronGeometry(34,1),glowMat));
+    this.active=false; this.nearMissed=false; this.mesh.visible=false;
+  }
+  function BossEnemy(stage){
+    this.stage=stage; this.maxHealth=90+stage*45; this.health=this.maxHealth; this.mesh=new THREE.Object3D();
+    var col=[0xff8b3d,0xd9a15b,0x92d8ff,0x7b4dff,0x53ffc5,0xff4aa8][stage]||0xff4444;
+    var coreMat=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.25,roughness:0.45,metalness:0.35,flatShading:true});
+    var darkMat=new THREE.MeshStandardMaterial({color:0x151820,roughness:0.55,metalness:0.7,flatShading:true});
+    var body=new THREE.Mesh(new THREE.IcosahedronGeometry(34,1),coreMat); this.mesh.add(body);
+    var ring=new THREE.Mesh(new THREE.TorusGeometry(52,4,8,32),darkMat); ring.rotation.x=Math.PI/2; this.mesh.add(ring);
+    for(var i=0;i<4;i++){
+      var spike=new THREE.Mesh(new THREE.ConeGeometry(8,34,6),darkMat);
+      var a=i*Math.PI/2; spike.position.set(Math.cos(a)*44,Math.sin(a)*24,Math.sin(a)*44); spike.lookAt(0,0,0); this.mesh.add(spike);
+    }
+    this.mesh.position.set(60,150,-1800);
+    this.mesh.scale.setScalar(1.2);
+  }
+
+  // ═══════════════════════════════════════════
+  // EXHAUST PARTICLES
+  // ═══════════════════════════════════════════
+  var exhaustParticles,exhaustPositions,exhaustVelocities,exhaustLifes,exhaustIdx=0;
+  function createPlane(){
+    airplane=new AirPlane();
+    airplane.mesh.scale.set(0.35,0.35,0.35);
+    airplane.mesh.position.set(-40,110,-250);
+    scene.add(airplane.mesh);
+
+    var count=getQualityConfig().exhaustParticles;
+    exhaustPositions=new Float32Array(count*3);
+    exhaustVelocities=new Array(count).fill(0).map(function(){ return{x:0,y:0,z:0}; });
+    exhaustLifes=new Float32Array(count);
+    for(var i=0;i<count;i++){ exhaustPositions[i*3+1]=-1000; }
+    var geom=new THREE.BufferGeometry();
+    geom.setAttribute("position",new THREE.BufferAttribute(exhaustPositions,3));
+    var mat=new THREE.PointsMaterial({color:0x88ccff,size:10,transparent:true,opacity:0.7,blending:THREE.AdditiveBlending,sizeAttenuation:true});
+    exhaustParticles=new THREE.Points(geom,mat);
+    scene.add(exhaustParticles);
+  }
+
+  // ═══════════════════════════════════════════
+  // WEATHER
+  // ═══════════════════════════════════════════
+  var weatherParticles,weatherPositions,weatherWindOffsets,lightningMesh,lightningTimer=0;
+  function createWeather(){
+    var count=getQualityConfig().weatherParticles;
+    weatherPositions=new Float32Array(count*3);
+    weatherWindOffsets=new Float32Array(count);
+    for(var p=0;p<count;p++){
+      weatherPositions[p*3]=Math.random()*2000-1000;
+      weatherPositions[p*3+1]=Math.random()*2000-500;
+      weatherPositions[p*3+2]=Math.random()*2000-1000;
+      weatherWindOffsets[p]=Math.random()*Math.PI*2;
+    }
+    var pGeom=new THREE.BufferGeometry();
+    pGeom.setAttribute("position",new THREE.BufferAttribute(weatherPositions,3));
+    var pMat=new THREE.PointsMaterial({color:0xffffff,size:6,transparent:true,opacity:0.82,blending:THREE.AdditiveBlending,sizeAttenuation:true});
+    weatherParticles=new THREE.Points(pGeom,pMat);
+    weatherParticles.visible=false;
+    scene.add(weatherParticles);
+    // Lightning
+    var lVerts=[];
+    for(var i=0;i<25;i++) lVerts.push(0,-i*35,0);
+    var lPos=new Float32Array(lVerts);
+    var lGeom=new THREE.BufferGeometry();
+    lGeom.setAttribute("position",new THREE.BufferAttribute(new Float32Array(25*3),3));
+    var lMat=new THREE.LineBasicMaterial({color:0xffffaa,transparent:true,opacity:0.9});
+    lightningMesh=new THREE.Line(lGeom,lMat);
+    lightningMesh.position.set(0,400,-300); lightningMesh.visible=false;
+    scene.add(lightningMesh);
+  }
+  function updateWeather(){
+    if(!weatherParticles) return;
+    var pos=weatherParticles.geometry.attributes.position.array;
+    var now=gameNow(); var n=pos.length/3;
+    var motionScale=getMotionScale();
+    if(currentStage===0){
+      weatherParticles.visible=false; lightningMesh.visible=false;
+    } else if(currentStage===1){
+      weatherParticles.visible=true; lightningMesh.visible=false;
+      weatherParticles.material.color.setHex(0xffd08a); weatherParticles.material.size=4;
+      for(var si=0;si<n;si++){
+        pos[si*3]-=(10+Math.sin(now*0.002+weatherWindOffsets[si])*3)*motionScale;
+        pos[si*3+1]+=Math.sin(now*0.003+weatherWindOffsets[si])*0.5;
+        if(pos[si*3]<-1000) pos[si*3]=1000;
+      }
+      weatherParticles.geometry.attributes.position.needsUpdate=true;
+    } else if(currentStage===2){
+      weatherParticles.visible=true; lightningMesh.visible=false;
+      weatherParticles.material.color.setHex(0xffffff); weatherParticles.material.size=5;
+      for(var i=0;i<n;i++){
+        pos[i*3+1]-=1.5;
+        pos[i*3]+=Math.sin(now*0.001+weatherWindOffsets[i])*0.8*motionScale;
+        pos[i*3+2]+=Math.cos(now*0.001+weatherWindOffsets[i])*0.3*motionScale;
+        if(pos[i*3+1]<-500) pos[i*3+1]=1500;
+      }
+      weatherParticles.geometry.attributes.position.needsUpdate=true;
+    } else if(currentStage===3){
+      weatherParticles.visible=true;
+      weatherParticles.material.color.setHex(0xaaaaaa); weatherParticles.material.size=13;
+      for(var i=0;i<n;i++){
+        pos[i*3+1]-=45;
+        pos[i*3]-=(6+Math.sin(now*0.002+weatherWindOffsets[i])*2)*motionScale;
+        if(pos[i*3+1]<-500) pos[i*3+1]=1500;
+      }
+      weatherParticles.geometry.attributes.position.needsUpdate=true;
+      if(Math.random()>0.965&&lightningTimer<=0){
+        lightningTimer=0.6; lightningMesh.visible=true;
+        lightningMesh.position.x=rand(-400,400); lightningMesh.position.z=rand(-600,-100);
+        var lp=lightningMesh.geometry.attributes.position.array;
+        for(var l=1;l<25;l++){
+          lp[l*3]=lp[(l-1)*3]+rand(-35,35);
+          lp[l*3+1]=lp[(l-1)*3+1]-35;
+          lp[l*3+2]=lp[(l-1)*3+2]+rand(-35,35);
+        }
+        lightningMesh.geometry.attributes.position.needsUpdate=true;
+      }
+      if(lightningTimer>0){ lightningTimer-=0.04; if(lightningTimer<=0) lightningMesh.visible=false; }
+    } else if(currentStage===4){
+      weatherParticles.visible=true; lightningMesh.visible=false;
+      weatherParticles.material.color.setHex(0x64ffd0); weatherParticles.material.size=7;
+      for(var ai=0;ai<n;ai++){
+        pos[ai*3]+=Math.sin(now*0.002+weatherWindOffsets[ai])*1.2*motionScale;
+        pos[ai*3+1]+=Math.cos(now*0.0015+weatherWindOffsets[ai])*0.8*motionScale;
+        pos[ai*3+2]+=7;
+        if(pos[ai*3+2]>200) pos[ai*3+2]=-1800;
+      }
+      weatherParticles.geometry.attributes.position.needsUpdate=true;
+    } else {
+      weatherParticles.visible=true; lightningMesh.visible=false;
+      weatherParticles.material.color.setHex(0xffffff); weatherParticles.material.size=3;
+      for(var i=0;i<n;i++){
+        pos[i*3+2]+=12;
+        pos[i*3]+=Math.sin(now*0.0005+weatherWindOffsets[i])*0.2*motionScale;
+        if(pos[i*3+2]>200) pos[i*3+2]=-1800;
+      }
+      weatherParticles.geometry.attributes.position.needsUpdate=true;
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // SCENE SETUP
+  // ═══════════════════════════════════════════
+  function createSky(){ sky=new Sky(); sky.mesh.position.y=offSet; scene.add(sky.mesh); }
+  function createLand(){ land=new Land(); land.mesh.position.y=offSet; land.mesh.visible=SHOW_GROUND_PLANET; scene.add(land.mesh); }
+  function createOrbit(){ orbit=new Orbit(); orbit.mesh.position.y=offSet; orbit.mesh.rotation.z=-Math.PI/6; scene.add(orbit.mesh); }
+  function createForest(){ forest=new Forest(); forest.mesh.position.y=offSet; forest.mesh.visible=SHOW_GROUND_PLANET; scene.add(forest.mesh); }
+  function createSun(){ sun=new Sun(); sun.mesh.scale.set(1,1,0.3); sun.mesh.position.set(0,-30,-850); scene.add(sun.mesh); }
+  function createCities(){
+    cityWorld=new THREE.Object3D(); cityWorld.position.y=offSet; cityWorld.visible=SHOW_GROUND_PLANET; scene.add(cityWorld);
+    var styles=["ASIAN","AMERICAN","EUROPEAN","RUSSIAN","MIDDLE_EASTERN","MODERN"];
+    var cityCount=getQualityConfig().cities;
+    var stepAngle=Math.PI*2/cityCount;
+    for(var i=0;i<cityCount;i++){
+      var city=new City();
+      city.build(styles[Math.floor(Math.random()*styles.length)]);
+      cities.push(city);
+      var a=stepAngle*i; var h=3000;
+      city.mesh.position.set(Math.cos(a)*h,Math.sin(a)*h,150+Math.random()*50);
+      city.mesh.rotation.z=a+(Math.PI/2)*3;
+      city.angle=a;
+      cityWorld.add(city.mesh);
+    }
+  }
+  function createGameObjects(){
+    rings=[]; obstacles=[]; powerups=[]; coins=[]; bullets=[]; asteroids=[];
+    for(var i=0;i<11;i++){ var r=new Ring(); scene.add(r.mesh); rings.push(r); }
+    for(var j=0;j<5;j++){ var m=new Obstacle(currentStage); scene.add(m.mesh); obstacles.push(m); }
+    for(var k=0;k<6;k++){
+      var type=powerupTypes[k%powerupTypes.length];
+      var p=new PowerUp(type); scene.add(p.mesh); powerups.push(p);
+    }
+    for(var b=0;b<10;b++){ var bullet=new Bullet(); scene.add(bullet.mesh); bullets.push(bullet); }
+    for(var a=0;a<8;a++){ var asteroid=new Asteroid(); scene.add(asteroid.mesh); asteroids.push(asteroid); }
+  }
+
+  // ═══════════════════════════════════════════
+  // SPAWN HELPERS
+  // ═══════════════════════════════════════════
+  function spawnRing(ring,initial){
+    var idx=rings.indexOf(ring);
+    var formation=Math.floor((score/450)+idx)%4;
+    var x=rand(-180,160), y=rand(60,250);
+    if(formation===1){ x=-120+(idx%6)*48; y=125+Math.sin(idx*0.8)*55; }
+    else if(formation===2){ var a=idx/rings.length*Math.PI*2; x=Math.cos(a)*115-35; y=150+Math.sin(a)*80; }
+    else if(formation===3){ x=-165+(idx%4)*88; y=70+Math.floor(idx/4)*44; }
+    ring.mesh.position.set(x,y,initial?rand(-2600,-1000):rand(-2800,-1200));
+    ring.mesh.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    var s=1+Math.random()*0.4; ring.mesh.scale.set(s,s,s);
+    ring.collected=false;
+  }
+  function spawnCoin(coin,initial){
+    coin.mesh.position.set(rand(-185,160),rand(60,240),initial?rand(-4200,-1300):rand(-5200,-1800));
+    coin.mesh.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    var s=0.8+Math.random()*0.45; coin.mesh.scale.set(s,s,s);
+  }
+  function spawnObstacle(obstacle,initial){
+    var targetType=currentStage;
+    if(currentStage>0){
+      var r=Math.random();
+      if(currentStage===1) targetType=r>0.55?0:3;
+      else if(currentStage===2) targetType=r>0.72?0:1;
+      else if(currentStage===3){ if(r>0.7) targetType=2; else if(r>0.3) targetType=1; else targetType=0; }
+      else if(currentStage===4) targetType=r>0.5?2:3;
+      else if(currentStage===5) targetType=r>0.35?3:2;
+    }
+    if(obstacle.type!==targetType){
+      scene.remove(obstacle.mesh);
+      var idx=obstacles.indexOf(obstacle);
+      obstacle=new Obstacle(targetType);
+      scene.add(obstacle.mesh);
+      obstacles[idx]=obstacle;
+    }
+    obstacle.mesh.position.set(rand(-215,215),rand(38,252),initial?rand(-4600,-1500):rand(-5600,-1900));
+    obstacle.mesh.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    var s=0.8+Math.random()*0.8; obstacle.mesh.scale.set(s,s,s);
+    obstacle.nearMissed=false;
+  }
+  function spawnPowerup(powerup,initial){
+    powerup.type=powerupTypes[Math.floor(Math.random()*powerupTypes.length)];
+    scene.remove(powerup.mesh);
+    var fresh=new PowerUp(powerup.type);
+    fresh.mesh.position.set(rand(-170,150),rand(70,230),initial?rand(-5600,-2200):rand(-7000,-3200));
+    fresh.collected=false;
+    scene.add(fresh.mesh);
+    var idx=powerups.indexOf(powerup);
+    if(idx!==-1) powerups[idx]=fresh;
+  }
+  function spawnAsteroid(asteroid,delayIndex){
+    asteroid.active=true; asteroid.nearMissed=false; asteroid.mesh.visible=true;
+    asteroid.mesh.position.set(rand(-230,220),rand(45,260),-2600-(delayIndex||0)*280-rand(0,260));
+    asteroid.mesh.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    var s=0.75+Math.random()*0.9; asteroid.mesh.scale.set(s,s,s);
+  }
+
+  // ═══════════════════════════════════════════
+  // GAME STATE
+  // ═══════════════════════════════════════════
+  function resetGame(startNow){
+    if(reviveInterval) clearInterval(reviveInterval);
+    maxLives=getStartingLives();
+    score=0; lives=maxLives; gameOver=!startNow; hitTimer=0;
+    runTime=0; distance=0; comboCount=0; comboTimer=0;
+    bestComboThisRun=0; ringsCollectedThisRun=0; runCoins=0; powerupsThisRun=0;
+    currentStage=0; previousStage=-1; scoreMultiplier=1;
+    activeEffects={shield:0,magnet:0,slow:0,boost:0,score2x:0,timeWarp:0,starPower:0,extraLife:0};
+    bossSpawnedStages={}; if(bossEnemy){ scene.remove(bossEnemy.mesh); bossEnemy=null; }
+    shootCooldown=0; nearMissCount=0; screenShakeTimer=0; speedLineTimer=0; wingTrailBoost=0;
+    bulletTimeTimer=0; bulletTimeTriggered=false; asteroidWaveTimer=0; asteroidWaveActive=0;
+    comboMilestonesHit={};
+    for(var b=0;b<bullets.length;b++){ bullets[b].active=false; bullets[b].mesh.visible=false; }
+    for(var a=0;a<asteroids.length;a++){ asteroids[a].active=false; asteroids[a].mesh.visible=false; }
+    runSaved=false; frameCounter=0;
+    mousePos={x:0,y:0};
+    airplane.mesh.position.set(-40,110,-250);
+    airplane.mesh.rotation.set(0,0,0);
+    airplane.propeller.rotation.set(0,0,0);
+    for(var i=0;i<rings.length;i++) spawnRing(rings[i],true);
+    for(var j=0;j<obstacles.length;j++) spawnObstacle(obstacles[j],true);
+    for(var k=0;k<powerups.length;k++) spawnPowerup(powerups[k],true);
+    generateMissions();
+    modalEl.classList.add("hidden");
+    updateHUD();
+    if(startNow){ soundManager.playStart(); soundManager.startMusic(); }
+  }
+  function startGame(){
+    soundManager.ensureReady();
+    stats.gamesPlayed=(stats.gamesPlayed||0)+1; saveStats();
+    gameMode="playing"; setBodyMode("playing");
+    menuOverlayEl.classList.add("hidden"); modalEl.classList.add("hidden");
+    resetGame(true); renderMenuStats();
+  }
+  function restartGame(){ startGame(); }
+  function showMainMenu(){
+    if(reviveInterval) clearInterval(reviveInterval);
+    gameMode="menu"; gameOver=true; setBodyMode("menu");
+    modalEl.classList.add("hidden"); menuOverlayEl.classList.remove("hidden");
+    soundManager.stopMusic(); renderMenuStats();
+    comboBarEl.classList.remove("active");
+    dangerRingEl.className="";
+    if(currentSidePanel==="settings") showSettingsPanel(); else showLeaderboardPanel();
+  }
+  function pauseGame(){
+    if(gameMode!=="playing") return;
+    gameMode="paused"; gameOver=true; setBodyMode("paused");
+    soundManager.stopMusic();
+    modalTitleEl.textContent=t("pausedTitle"); modalTextEl.textContent=t("pausedText");
+    runSummaryEl.style.display="none"; runDetailsEl.style.display="none";
+    reviveBtn.style.display="none"; resumeBtn.style.display="inline-block";
+    restartBtn.style.display="inline-block"; menuBtn.style.display="inline-block";
+    modalEl.classList.remove("hidden");
+  }
+  function resumeGame(){
+    if(gameMode!=="paused") return;
+    gameMode="playing"; gameOver=false; setBodyMode("playing");
+    modalEl.classList.add("hidden"); soundManager.startMusic();
+  }
+  function togglePause(){ if(gameMode==="playing") pauseGame(); else if(gameMode==="paused") resumeGame(); }
+
+  // ═══════════════════════════════════════════
+  // HUD UPDATE
+  // ═══════════════════════════════════════════
+  function updateHUD(){
+    var baseSpeed=getBaseGameSpeed();
+    var baseMultiplier=baseSpeed>=2.0?3:(baseSpeed>=1.45?2:1);
+    var comboBonus=Math.min(4,Math.floor(comboCount/5)*getComboUpgradeBonus());
+    scoreMultiplier=Math.min(8,Math.round((baseMultiplier+comboBonus)*getUpgradeScoreBonus()*(activeEffects.score2x>0?2:1)));
+
+    var scoreText=score+(scoreMultiplier>1?" (×"+scoreMultiplier+")":"");
+    setTextIfChanged(scoreEl,"score",scoreText);
+    setTextIfChanged(bestScoreEl,"bestScore",Math.max(getBestScore(),score));
+
+    // Lives as hearts
+    var heartsHTML="";
+    for(var i=0;i<maxLives;i++){
+      heartsHTML+="<span style='color:"+(i<lives?"#ff4d4d":"#555");
+      heartsHTML+="'>❤</span>";
+    }
+    setHTMLIfChanged(livesEl,"lives",heartsHTML);
+    var displayedCurrency=runCoins+(runSaved?0:calculateScoreCurrencyReward(score));
+    setTextIfChanged(coinsEl,"coins","+"+displayedCurrency+" / "+totalCoins);
+
+    setTextIfChanged(comboEl,"combo",comboCount+(comboTimer>0?" /"+Math.ceil(comboTimer)+"s":""));
+    setTextIfChanged(speedEl,"speed",getGameSpeed().toFixed(1)+"x");
+    setTextIfChanged(stageNameEl,"stageName",formatStageName(currentStage));
+
+    var powerupText=getActivePowerupText();
+    setDisplayIfChanged(powerupBadgeEl,"powerupDisplay",powerupText?"inline-block":"none");
+    setTextIfChanged(powerupTextEl,"powerupText",powerupText);
+
+    // Combo bar
+    if(comboTimer>0){
+      comboBarEl.classList.add("active");
+      comboBarEl.style.width=(comboTimer/2.4*100)+"%";
+    } else {
+      comboBarEl.classList.remove("active");
+      comboBarEl.style.width="0%";
+    }
+
+    // Powerup badge glow class
+    var glowClass="badge small";
+    if(activeEffects.shield>0) glowClass+=" shield-glow";
+    else if(activeEffects.magnet>0) glowClass+=" magnet-glow";
+    else if(activeEffects.slow>0) glowClass+=" slow-glow";
+    else if(activeEffects.boost>0) glowClass+=" boost-glow";
+    if(powerupBadgeEl.className!==glowClass) powerupBadgeEl.className=glowClass;
+    if(bossEnemy){
+      var pct=clamp(bossEnemy.health/bossEnemy.maxHealth,0,1);
+      bossHudEl.style.display="block";
+      bossNameEl.textContent=t("boss")+" · "+formatStageName(bossEnemy.stage);
+      bossHealthTextEl.textContent=Math.ceil(pct*100)+"%";
+      bossHealthFillEl.style.width=(pct*100)+"%";
+    } else {
+      bossHudEl.style.display="none";
+    }
+  }
+
+  function showEndScreen(title,text){
+    if(reviveInterval) clearInterval(reviveInterval);
+    saveHighScore(); gameMode="gameover"; setBodyMode("gameover");
+    updateHUD();
+    soundManager.stopMusic();
+    modalTitleEl.textContent=title; modalTextEl.textContent=text;
+    runSummaryEl.style.display="flex"; runSummaryScoreEl.textContent=score;
+    runDetailsEl.style.display="block";
+    runDetailsEl.textContent="Rings: "+ringsCollectedThisRun+" · Currency: +"+runCoins+" · Combo: "+bestComboThisRun+" · Time: "+Math.floor(runTime)+"s";
+    resumeBtn.style.display="none"; reviveBtn.style.display="none";
+    restartBtn.style.display="inline-block"; menuBtn.style.display="inline-block";
+    modalEl.classList.remove("hidden");
+    comboBarEl.classList.remove("active");
+    dangerRingEl.className="";
+  }
+  function showReviveScreen(){
+    gameMode="revive"; gameOver=true; reviveTimer=5; setBodyMode("gameover");
+    modalTitleEl.textContent=t("crashTitle");
+    modalTextEl.textContent=t("reviveText",{cost:REVIVE_COST,seconds:reviveTimer});
+    runSummaryEl.style.display="flex"; runSummaryScoreEl.textContent=score;
+    runDetailsEl.style.display="none";
+    resumeBtn.style.display="none"; reviveBtn.style.display="inline-block";
+    restartBtn.style.display="inline-block"; menuBtn.style.display="inline-block";
+    modalEl.classList.remove("hidden");
+    reviveInterval=setInterval(function(){
+      reviveTimer--;
+      if(reviveTimer>0) modalTextEl.textContent=t("reviveText",{cost:REVIVE_COST,seconds:reviveTimer});
+      else{ clearInterval(reviveInterval); showEndScreen(t("gameOverTitle"),t("gameOverText")); }
+    },1000);
+  }
+  function doRevive(){
+    if(score>=REVIVE_COST){
+      clearInterval(reviveInterval); score-=REVIVE_COST; lives=maxLives;
+      gameMode="playing"; gameOver=false; hitTimer=1.5;
+      activeEffects.shield=Math.max(activeEffects.shield,POWERUP_DURATIONS.reviveShield);
+      stats.totalRevives=(stats.totalRevives||0)+1; saveStats();
+      unlockAchievement("revive");
+      for(var i=0;i<obstacles.length;i++){
+        if(obstacles[i].mesh.position.z>-1000) spawnObstacle(obstacles[i],false);
+      }
+      modalEl.classList.add("hidden"); setBodyMode("playing");
+      soundManager.startMusic(); updateHUD();
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // PLANE UPDATE
+  // ═══════════════════════════════════════════
+  function updatePlane(){
+    var targetY=normalize(mousePos.y,-0.75,0.75,50,190);
+    var targetX=normalize(mousePos.x,-0.75,0.75,-100,-20);
+    var smooth=0.08;
+    airplane.mesh.position.y+=(targetY-airplane.mesh.position.y)*smooth;
+    airplane.mesh.position.x+=(targetX-airplane.mesh.position.x)*smooth;
+    airplane.mesh.rotation.z+=((targetY-airplane.mesh.position.y)*0.015-airplane.mesh.rotation.z)*0.15;
+    airplane.mesh.rotation.x+=((airplane.mesh.position.y-targetY)*0.008-airplane.mesh.rotation.x)*0.15;
+    airplane.mesh.rotation.y+=((airplane.mesh.position.x-targetX)*0.008-airplane.mesh.rotation.y)*0.15;
+
+    var gameSpeed=getGameSpeed();
+    airplane.propeller.rotation.x+=0.35*gameSpeed;
+    var motionScale=getMotionScale();
+    airplane.mesh.position.y+=Math.sin(gameNow()*0.002)*0.1*motionScale;
+
+    // Afterburner effect on boost
+    var boostAlpha=activeEffects.boost>0?0.85:(wingTrailBoost>0?0.38:0);
+    airplane.afterburnerR.material.opacity=boostAlpha;
+    airplane.afterburnerL.material.opacity=boostAlpha;
+    if(activeEffects.boost>0){
+      var flicker=0.7+Math.random()*0.3;
+      airplane.afterburnerR.scale.setScalar(flicker*2);
+      airplane.afterburnerL.scale.setScalar(flicker*2);
+    }
+
+    // Exhaust particles (BufferGeometry)
+    var ePos=exhaustParticles.geometry.attributes.position.array;
+    var count=ePos.length/3;
+    var p=exhaustIdx;
+    ePos[p*3]=airplane.mesh.position.x-15;
+    ePos[p*3+1]=airplane.mesh.position.y-2;
+    ePos[p*3+2]=airplane.mesh.position.z;
+    exhaustLifes[p]=1.0;
+    exhaustVelocities[p]={x:(-Math.random()*3-3),y:(Math.random()*3-1.5),z:(Math.random()*3-1.5)};
+    exhaustIdx=(exhaustIdx+1)%count;
+    for(var i=0;i<count;i++){
+      if(exhaustLifes[i]>0){
+        exhaustLifes[i]-=0.035;
+        ePos[i*3]+=exhaustVelocities[i].x; ePos[i*3+1]+=exhaustVelocities[i].y-0.5; ePos[i*3+2]+=exhaustVelocities[i].z;
+        exhaustVelocities[i].x*=0.98; exhaustVelocities[i].y*=0.98; exhaustVelocities[i].z*=0.98;
+      } else { ePos[i*3+1]=-1000; }
+    }
+    exhaustParticles.geometry.attributes.position.needsUpdate=true;
+    exhaustParticles.material.color.setHex(activeEffects.boost>0?0xff6600:(currentStage>=5?0xffaa00:0x88ccff));
+  }
+
+  // ═══════════════════════════════════════════
+  // BACKGROUND & LIGHTING
+  // ═══════════════════════════════════════════
+  var currentSkyColors={tR:105,tG:143,tB:196,bR:155,bG:206,bB:230,hInt:0.95,sInt:1.25};
+  function updateBackgroundAndLighting(){
+    var target={tR:105,tG:143,tB:196,bR:155,bG:206,bB:230,hInt:0.95,sInt:1.25};
+    var targetOffSet=-3000;
+    if(currentStage===1){
+      target={tR:222,tG:168,tB:95,bR:117,bG:74,bB:47,hInt:0.95,sInt:1.1};
+      sun.mesh.visible=true;
+    } else if(currentStage===2){
+      target={tR:205,tG:218,tB:232,bR:118,bG:145,bB:172,hInt:0.82,sInt:0.72};
+      sun.mesh.visible=false;
+    } else if(currentStage===3){
+      target={tR:38,tG:44,tB:53,bR:12,bG:17,bB:24,hInt:0.42,sInt:0.32};
+      sun.mesh.visible=false;
+    } else if(currentStage===4){
+      target={tR:12,tG:25,tB:48,bR:2,bG:35,bB:38,hInt:0.42,sInt:0.46};
+      sun.mesh.visible=false;
+      if(stars){
+        stars.points.material.opacity=lerp(stars.points.material.opacity,0.6,0.025);
+        if(stars.points2) stars.points2.material.opacity=lerp(stars.points2.material.opacity,0.5,0.025);
+        if(stars.heroPoints) stars.heroPoints.material.opacity=lerp(stars.heroPoints.material.opacity,0.5,0.025);
+      }
+    } else if(currentStage===5){
+      target={tR:2,tG:2,tB:8,bR:0,bG:0,bB:4,hInt:0.22,sInt:0.18};
+      sun.mesh.visible=false; targetOffSet=-5000;
+      var now3=gameClock;
+      if(stars){
+        var targetOp=1.0;
+        stars.points.material.opacity=lerp(stars.points.material.opacity,targetOp,0.025);
+        if(stars.points2) stars.points2.material.opacity=lerp(stars.points2.material.opacity,targetOp*0.85,0.025);
+        if(stars.heroPoints) stars.heroPoints.material.opacity=lerp(stars.heroPoints.material.opacity,targetOp*0.9,0.025);
+        // Twinkle: modulate hero star sizes via opacity flicker
+        if(stars.heroPoints){
+          var hOp=0.65+0.35*Math.sin(now3*1.8);
+          stars.heroPoints.material.opacity=Math.min(1,stars.points.material.opacity)*hOp;
+        }
+        // Gentle drift
+        stars.mesh.rotation.z+=0.00006;
+        stars.mesh.rotation.x+=0.000025;
+      }
+      if(solarSystem){
+        solarSystem.mesh.visible=true;
+        solarSystem._time=(solarSystem._time||0)+0.016;
+        var st=solarSystem._time;
+        solarSystem.mesh.position.y=lerp(solarSystem.mesh.position.y,120,0.008);
+        // Sun corona pulsing
+        if(solarSystem.sunCorona1){
+          var pulse=1+0.04*Math.sin(st*2.2);
+          var pulse2=1+0.07*Math.sin(st*1.5+1);
+          var pulse3=1+0.12*Math.sin(st*0.9+2.4);
+          solarSystem.sunCorona1.scale.setScalar(pulse);
+          solarSystem.sunCorona2.scale.setScalar(pulse2);
+        }
+        if(solarSystem.sunGroup) solarSystem.sunGroup.rotation.y+=0.002;
+        // Planet rotations (each planet spins on own axis)
+        solarSystem.planets.forEach(function(p,i){
+          var speed=[0.018,0.013,0.010,0.014,0.035,0.022,0.016,0.012][i]||0.01;
+          p.rotation.y+=speed;
+        });
+        // Earth clouds drift
+        if(solarSystem.earthClouds) solarSystem.earthClouds.rotation.y+=0.003;
+        // Jupiter bands visual drift
+        if(solarSystem.jupiterGroup) solarSystem.jupiterGroup.rotation.y+=0.028;
+        // Orbit groups gentle tilt sway
+        solarSystem.orbitGroups.forEach(function(og,i){
+          og.rotation.z=Math.sin(st*0.15+i*0.7)*0.012;
+        });
+        // Saturn ring shimmer
+        if(solarSystem.saturnGroup) solarSystem.saturnGroup.rotation.y+=0.008;
+        // Uranus wobble
+        if(solarSystem.uranusGroup) solarSystem.uranusGroup.rotation.z=Math.PI/2+Math.sin(st*0.3)*0.05;
+      }
+    } else {
+      sun.mesh.visible=true;
+      if(stars){
+        stars.points.material.opacity=lerp(stars.points.material.opacity,0,0.06);
+        if(stars.points2) stars.points2.material.opacity=lerp(stars.points2.material.opacity,0,0.06);
+        if(stars.heroPoints) stars.heroPoints.material.opacity=lerp(stars.heroPoints.material.opacity,0,0.06);
+      }
+      if(solarSystem){
+        solarSystem.mesh.position.y=lerp(solarSystem.mesh.position.y,-2000,0.025);
+        if(solarSystem.mesh.position.y<-1900) solarSystem.mesh.visible=false;
+      }
+    }
+    offSet=lerp(offSet,targetOffSet,0.02);
+    if(land){ land.mesh.position.y=offSet; }
+    if(forest) forest.mesh.position.y=offSet;
+    if(sky) sky.mesh.position.y=offSet;
+    if(orbit) orbit.mesh.position.y=offSet;
+    var spd=0.05;
+    currentSkyColors.tR=lerp(currentSkyColors.tR,target.tR,spd);
+    currentSkyColors.tG=lerp(currentSkyColors.tG,target.tG,spd);
+    currentSkyColors.tB=lerp(currentSkyColors.tB,target.tB,spd);
+    currentSkyColors.bR=lerp(currentSkyColors.bR,target.bR,spd);
+    currentSkyColors.bG=lerp(currentSkyColors.bG,target.bG,spd);
+    currentSkyColors.bB=lerp(currentSkyColors.bB,target.bB,spd);
+    currentSkyColors.hInt=lerp(currentSkyColors.hInt,target.hInt,0.1);
+    currentSkyColors.sInt=lerp(currentSkyColors.sInt,target.sInt,0.1);
+    container.style.background="linear-gradient(to bottom,rgb("+
+      Math.round(currentSkyColors.tR)+","+Math.round(currentSkyColors.tG)+","+Math.round(currentSkyColors.tB)+"),rgb("+
+      Math.round(currentSkyColors.bR)+","+Math.round(currentSkyColors.bG)+","+Math.round(currentSkyColors.bB)+"))";
+    scene.fog.color.setRGB(currentSkyColors.bR/255,currentSkyColors.bG/255,currentSkyColors.bB/255);
+    hemisphereLight.intensity=currentSkyColors.hInt;
+    shadowLight.intensity=currentSkyColors.sInt;
+  }
+
+  // ═══════════════════════════════════════════
+  // COLLECTIBLES UPDATE
+  // ═══════════════════════════════════════════
+  function updateCollectibles(){
+    var gameSpeed=getGameSpeed(); var planePos=airplane.mesh.position;
+    var now=gameNow(); var motionScale=getMotionScale();
+    var currentColor=ringColors[currentStage]; var currentEmissive=ringEmissives[currentStage];
+
+    // Check for nearest obstacle (danger meter)
+    var nearestObstacleDist=9999;
+    for(var oi=0;oi<obstacles.length;oi++){
+      var obs=obstacles[oi];
+      var odx=planePos.x-obs.mesh.position.x;
+      var ody=planePos.y-obs.mesh.position.y;
+      var odz=planePos.z-obs.mesh.position.z;
+      var od=Math.sqrt(odx*odx+ody*ody+odz*odz);
+      if(od<nearestObstacleDist) nearestObstacleDist=od;
+    }
+    if(nearestObstacleDist<80) dangerRingEl.className="critical";
+    else if(nearestObstacleDist<140) dangerRingEl.className="near";
+    else dangerRingEl.className="";
+
+    for(var i=0;i<rings.length;i++){
+      var ring=rings[i];
+      if(ring.torus.material.color.getHex()!==currentColor){
+        ring.torus.material.color.setHex(currentColor);
+        ring.torus.material.emissive.setHex(currentEmissive);
+      }
+      ring.mesh.position.z+=gameSpeed*11;
+      ring.mesh.rotation.y+=(0.03+Math.sin(now*0.001+i)*0.02)*motionScale;
+      ring.mesh.rotation.x+=(0.015+Math.cos(now*0.0015+i)*0.01)*motionScale;
+      ring.mesh.position.y+=Math.sin(now*0.003+i*0.5)*0.2*motionScale;
+      if(activeEffects.magnet>0&&ring.mesh.position.z>-650&&ring.mesh.position.z<70){
+        ring.mesh.position.x+=(planePos.x-ring.mesh.position.x)*0.036;
+        ring.mesh.position.y+=(planePos.y-ring.mesh.position.y)*0.036;
+      }
+      if(ring.mesh.position.z>180){ spawnRing(ring,false); continue; }
+      var dx=planePos.x-ring.mesh.position.x;
+      var dy=planePos.y-ring.mesh.position.y;
+      var dz=planePos.z-ring.mesh.position.z;
+      var distSq=dx*dx+dy*dy+dz*dz;
+      var collectRadius=activeEffects.magnet>0?55:32;
+      if(distSq<collectRadius*collectRadius){
+        comboCount++; comboTimer=2.4;
+        bestComboThisRun=Math.max(bestComboThisRun,comboCount);
+        ringsCollectedThisRun++;
+        var pts=10*scoreMultiplier;
+        score+=pts;
+        updateMissionProgress("rings",1);
+        updateMissionProgress("combo",comboCount);
+        if(bossEnemy) damageBoss(8+Math.floor(comboCount/4));
+        // Score popup
+        spawnScorePopup("+" +pts+(comboCount>=5?" ×"+comboCount:""),ring.mesh.position.x,ring.mesh.position.y,comboCount>=10?"combo":"");
+        soundManager.playCollect(comboCount);
+        unlockAchievement("firstRing");
+        if(comboCount>=5) unlockAchievement("combo5");
+        if(comboCount>=20) unlockAchievement("combo20");
+        if(comboCount>=50) unlockAchievement("combo50");
+        checkComboMilestones();
+        spawnRing(ring,false);
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // POWERUP UPDATE
+  // ═══════════════════════════════════════════
+  function activatePowerup(type){
+    if(type==="shield") activeEffects.shield=Math.max(activeEffects.shield,getPowerDuration("shield"));
+    if(type==="magnet") activeEffects.magnet=Math.max(activeEffects.magnet,getPowerDuration("magnet"));
+    if(type==="slow") activeEffects.slow=Math.max(activeEffects.slow,getPowerDuration("slow"));
+    if(type==="boost") activeEffects.boost=Math.max(activeEffects.boost,getPowerDuration("boost"));
+    if(type==="score2x") activeEffects.score2x=Math.max(activeEffects.score2x,getPowerDuration("score2x"));
+    if(type==="timeWarp") activeEffects.timeWarp=Math.max(activeEffects.timeWarp,getPowerDuration("timeWarp"));
+    if(type==="starPower") activeEffects.starPower=Math.max(activeEffects.starPower,getPowerDuration("starPower"));
+    if(type==="extraLife") lives=Math.min(maxLives,lives+1);
+    powerupsThisRun++; stats.totalPowerups=(stats.totalPowerups||0)+1; updateMissionProgress("powerups",1);
+    soundManager.playPowerup();
+    spawnScorePopup(t(POWERUP_KEYS[type]).toUpperCase()+" ✦",airplane.mesh.position.x,airplane.mesh.position.y+30,type);
+  }
+  function updatePowerups(){
+    var gameSpeed=getGameSpeed(); var planePos=airplane.mesh.position;
+    var motionScale=getMotionScale();
+    for(var i=0;i<powerups.length;i++){
+      var powerup=powerups[i];
+      powerup.mesh.position.z+=gameSpeed*10.5;
+      powerup.mesh.rotation.y+=0.04*motionScale;
+      powerup.mesh.rotation.x+=0.025*motionScale;
+      if(powerup.shell) powerup.shell.rotation.z+=0.05*motionScale;
+      if(powerup.mesh.position.z>180){ spawnPowerup(powerup,false); continue; }
+      var dx=planePos.x-powerup.mesh.position.x;
+      var dy=planePos.y-powerup.mesh.position.y;
+      var dz=planePos.z-powerup.mesh.position.z;
+      var distSq=dx*dx+dy*dy+dz*dz;
+      if(distSq<42*42){ activatePowerup(powerup.type); spawnPowerup(powerup,false); }
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // OBSTACLE UPDATE
+  // ═══════════════════════════════════════════
+  function updateObstacles(){
+    var gameSpeed=getGameSpeed(); var planePos=airplane.mesh.position;
+    var now=gameNow(); var motionScale=getMotionScale();
+    for(var i=0;i<obstacles.length;i++){
+      var obstacle=obstacles[i];
+      obstacle.mesh.position.z+=gameSpeed*12.5;
+      obstacle.mesh.rotation.x+=(0.02+Math.sin(now*0.002+i)*0.015)*motionScale;
+      obstacle.mesh.rotation.y+=(0.025+Math.cos(now*0.0025+i)*0.01)*motionScale;
+      obstacle.mesh.rotation.z+=0.01*motionScale;
+      obstacle.mesh.position.y+=Math.sin(now*0.004+i*0.7)*0.15*motionScale;
+      if(obstacle.mesh.position.z>180){ spawnObstacle(obstacle,false); continue; }
+      var dx=planePos.x-obstacle.mesh.position.x;
+      var dy=planePos.y-obstacle.mesh.position.y;
+      var dz=planePos.z-obstacle.mesh.position.z;
+      var distSq=dx*dx+dy*dy+dz*dz;
+      if(distSq<34*34&&hitTimer<=0){
+        if(activeEffects.starPower>0){
+          score+=25*scoreMultiplier; spawnScorePopup("+STAR",obstacle.mesh.position.x,obstacle.mesh.position.y,"boost"); spawnObstacle(obstacle,false); continue;
+        }
+        if(settings.immortalMode){ comboCount=0; comboTimer=0; hitTimer=0.45; soundManager.playObstacle(); spawnObstacle(obstacle,false); continue; }
+        if(activeEffects.shield>0){
+          activeEffects.shield=0; hitTimer=0.65;
+          shieldFlashEl.style.opacity="1";
+          setTimeout(function(){ shieldFlashEl.style.opacity="0"; },200);
+          soundManager.playShieldBreak(); spawnObstacle(obstacle,false); continue;
+        }
+        lives--; comboCount=0; comboTimer=0; hitTimer=0.4;
+        soundManager.playObstacle(); spawnObstacle(obstacle,false);
+        maybeTriggerFinalLifeBulletTime();
+        if(lives<=0){
+          lives=0;
+          if(score>=REVIVE_COST) showReviveScreen();
+          else{ gameOver=true; showEndScreen(t("gameOverTitle"),t("gameOverText")); }
+        }
+      } else if(distSq<92*92&&distSq>42*42&&obstacle.mesh.position.z>-360&&obstacle.mesh.position.z<80){
+        awardNearMiss(obstacle);
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // FOREST UPDATE
+  // ═══════════════════════════════════════════
+  function updateForest(){
+    if(!forest||!forest.trees) return;
+    var tNow=gameNow();
+    for(var i=0;i<forest.trees.length;i++){
+      var tree=forest.trees[i];
+      tree.canopy.rotation.x=Math.sin(tNow*tree.swaySpeed+tree.swayOffset)*0.1;
+      tree.canopy.rotation.z=Math.cos(tNow*tree.swaySpeed+tree.swayOffset)*0.1;
+      var globalAngle=(tree.angle+forest.mesh.rotation.z)%(Math.PI*2);
+      if(globalAngle<0) globalAngle+=Math.PI*2;
+      tree.snowCap.visible=(currentStage===1);
+      var sinA=Math.sin(globalAngle);
+      var scale=0.001;
+      if(sinA>0.8) scale=tree.baseScale;
+      else if(sinA>0.6) scale=tree.baseScale*((sinA-0.6)/0.2);
+      tree.mesh.scale.set(scale,scale,scale);
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // CITIES
+  // ═══════════════════════════════════════════
+  var cityCountries=[
+    {name:"Japan",capital:"Tokyo",style:"ASIAN"},{name:"China",capital:"Beijing",style:"ASIAN"},
+    {name:"Indonesia",capital:"Jakarta",style:"ASIAN"},{name:"India",capital:"New Delhi",style:"MIDDLE_EASTERN"},
+    {name:"Egypt",capital:"Cairo",style:"MIDDLE_EASTERN"},{name:"Saudi Arabia",capital:"Riyadh",style:"MIDDLE_EASTERN"},
+    {name:"USA",capital:"Washington D.C.",style:"AMERICAN"},{name:"Mexico",capital:"Mexico City",style:"AMERICAN"},
+    {name:"Russia",capital:"Moscow",style:"RUSSIAN"},{name:"Kazakhstan",capital:"Astana",style:"RUSSIAN"},
+    {name:"Brazil",capital:"Brasília",style:"MODERN"},{name:"Nigeria",capital:"Abuja",style:"MODERN"},
+    {name:"Germany",capital:"Berlin",style:"EUROPEAN"},{name:"France",capital:"Paris",style:"EUROPEAN"},
+    {name:"Italy",capital:"Rome",style:"EUROPEAN"}
+  ];
+  var currentActiveCity=null;
+  function updateCities(){
+    if(!cityWorld) return;
+    if(!SHOW_GROUND_PLANET){ cityBadgeEl.style.display="none"; return; }
+    cityWorld.position.y=offSet;
+    if(currentStage===5){ cityBadgeEl.style.display="none"; return; }
+    var topCity=null,minDiff=999;
+    for(var i=0;i<cities.length;i++){
+      var city=cities[i];
+      var ga=(city.angle+cityWorld.rotation.z)%(Math.PI*2);
+      if(ga<0) ga+=Math.PI*2;
+      var diff=Math.abs(ga-Math.PI/2);
+      if(diff<minDiff){ minDiff=diff; topCity=city; }
+    }
+    if(topCity&&topCity!==currentActiveCity&&minDiff<0.2){
+      currentActiveCity=topCity;
+      var matching=cityCountries.filter(function(c){ return c.style===topCity.style; });
+      if(matching.length>0){
+        var c=matching[Math.floor(Math.random()*matching.length)];
+        cityNameEl.textContent=c.capital+", "+c.name;
+        cityBadgeEl.style.display="inline-block";
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // BOSSES
+  // ═══════════════════════════════════════════
+  function spawnBoss(stage){
+    if(!ENABLE_BOSSES) return;
+    if(bossEnemy||bossSpawnedStages[stage]||stage===0) return;
+    bossSpawnedStages[stage]=true;
+    bossEnemy=new BossEnemy(stage);
+    scene.add(bossEnemy.mesh);
+    soundManager.playObstacle();
+    spawnScorePopup(t("boss"),0,210,"boost");
+  }
+  function damageBoss(amount){
+    if(!bossEnemy) return;
+    bossEnemy.health-=amount;
+    bossEnemy.mesh.scale.setScalar(1.2+0.1*Math.random());
+    if(bossEnemy.health<=0){
+      var reward=35+bossEnemy.stage*12;
+      runCoins+=reward; score+=reward*scoreMultiplier;
+      stats.bossesDefeated=(stats.bossesDefeated||0)+1;
+      unlockAchievement("bossKill");
+      spawnScorePopup(t("bossKillName")+" ★"+reward,bossEnemy.mesh.position.x,bossEnemy.mesh.position.y,"combo");
+      scene.remove(bossEnemy.mesh); bossEnemy=null; soundManager.playAchievement();
+    }
+  }
+  function updateBoss(dt){
+    if(!bossEnemy) return;
+    var b=bossEnemy, p=airplane.mesh.position, speed=getGameSpeed();
+    b.mesh.position.z+=speed*7;
+    if(b.mesh.position.z>-220) b.mesh.position.z=-1200;
+    b.mesh.position.x=70*Math.sin(gameClock*1.5+b.stage)+20*Math.sin(gameClock*3.1);
+    b.mesh.position.y=155+45*Math.cos(gameClock*1.1+b.stage);
+    b.mesh.rotation.x+=0.015; b.mesh.rotation.y+=0.03; b.mesh.rotation.z+=0.01;
+    var dx=p.x-b.mesh.position.x, dy=p.y-b.mesh.position.y, dz=p.z-b.mesh.position.z;
+    if(dx*dx+dy*dy+dz*dz<58*58&&hitTimer<=0){
+      if(activeEffects.starPower>0){ damageBoss(35); hitTimer=0.25; }
+      else if(activeEffects.shield>0){ activeEffects.shield=0; damageBoss(15); hitTimer=0.7; }
+      else if(!settings.immortalMode){ lives--; hitTimer=0.8; comboCount=0; comboTimer=0; soundManager.playObstacle(); if(lives<=0) showReviveScreen(); }
+    }
+    if(activeEffects.starPower>0) damageBoss(dt*12);
+  }
+
+  // ═══════════════════════════════════════════
+  // STAGE PROGRESSION
+  // ═══════════════════════════════════════════
+  function updateStageProgression(){
+    var newStage=0;
+    if(score>=STAGE_THRESHOLDS.space) newStage=5;
+    else if(score>=STAGE_THRESHOLDS.aurora) newStage=4;
+    else if(score>=STAGE_THRESHOLDS.storm) newStage=3;
+    else if(score>=STAGE_THRESHOLDS.snow) newStage=2;
+    else if(score>=STAGE_THRESHOLDS.desert) newStage=1;
+    if(newStage!==currentStage&&newStage!==previousStage){
+      previousStage=currentStage;
+      currentStage=newStage;
+      // Stage transition flash
+      stageFlashEl.className="";
+      void stageFlashEl.offsetWidth;
+      var flashColors=["rgba(255,220,80","rgba(255,170,70","rgba(160,220,255","rgba(80,80,200","rgba(80,255,205","rgba(20,10,40"];
+      stageFlashEl.style.background=flashColors[currentStage]+",0.5)";
+      stageFlashEl.classList.add("show");
+      if(ENABLE_BOSSES) spawnBoss(currentStage);
+    }
+    if(score>=STAGE_THRESHOLDS.desert) unlockAchievement("reachDesert");
+    if(score>=STAGE_THRESHOLDS.snow) unlockAchievement("score300");
+    if(score>=STAGE_THRESHOLDS.storm) unlockAchievement("reachStorm");
+    if(score>=STAGE_THRESHOLDS.aurora) unlockAchievement("reachAurora");
+    if(score>=STAGE_THRESHOLDS.space) unlockAchievement("score1000");
+    if(runTime>=60) unlockAchievement("survivor60");
+  }
+
+  function updateEffectTimers(dt){
+    powerupTypes.forEach(function(type){ activeEffects[type]=Math.max(0,activeEffects[type]-dt); });
+    if(comboTimer>0){ comboTimer=Math.max(0,comboTimer-dt); if(comboTimer===0) comboCount=0; }
+    shootCooldown=Math.max(0,shootCooldown-dt);
+    screenShakeTimer=Math.max(0,screenShakeTimer-dt);
+    speedLineTimer=Math.max(0,speedLineTimer-dt);
+    wingTrailBoost=Math.max(0,wingTrailBoost-dt);
+    bulletTimeTimer=Math.max(0,bulletTimeTimer-dt);
+    if(currentStage===5) asteroidWaveTimer=Math.max(0,asteroidWaveTimer-dt);
+  }
+
+  // ═══════════════════════════════════════════
+  // INPUT
+  // ═══════════════════════════════════════════
+  function handlePointerMove(event){
+    if(settings.controls==="keyboard") return;
+    var x=event.clientX,y=event.clientY;
+    if(event.touches&&event.touches.length){ x=event.touches[0].clientX; y=event.touches[0].clientY; }
+    mousePos.x=-1+(x/WIDTH)*2;
+    mousePos.y=1-(y/HEIGHT)*2;
+  }
+  function handleKeyDown(event){
+    var target=event.target;
+    var isTyping=target&&(target.tagName==="INPUT"||target.tagName==="SELECT");
+    var key=event.key.toLowerCase();
+    if(isTyping&&key!=="escape") return;
+    if(["arrowleft","arrowright","arrowup","arrowdown"," "].indexOf(key)!==-1&&gameMode==="playing") event.preventDefault();
+    if(key==="p"){ togglePause(); return; }
+    if(key==="escape"){ if(gameMode==="playing") pauseGame(); else if(gameMode==="paused") resumeGame(); return; }
+    if(key==="f"){ toggleFullscreen(); return; }
+    if(key==="m"){ soundManager.setMuted(settings.sound!==false); return; }
+    if((key==="enter"||key===" ")&&gameMode==="menu"){ startGame(); return; }
+    if((key===" "||key==="spacebar")&&gameMode==="playing"){ fireBullet(); return; }
+    keys[key]=true;
+  }
+  function handleKeyUp(event){ keys[event.key.toLowerCase()]=false; }
+  function toggleFullscreen(){
+    var root=document.documentElement;
+    if(!document.fullscreenElement&&root.requestFullscreen) root.requestFullscreen();
+    else if(document.exitFullscreen) document.exitFullscreen();
+  }
+  function applyKeyboardControls(){
+    if(gameMode!=="playing"||settings.controls==="pointer") return;
+    var step=0.025;
+    if(keys["arrowleft"]||keys["a"]) mousePos.x-=step;
+    if(keys["arrowright"]||keys["d"]) mousePos.x+=step;
+    if(keys["arrowup"]||keys["w"]) mousePos.y+=step;
+    if(keys["arrowdown"]||keys["s"]) mousePos.y-=step;
+    mousePos.x=clamp(mousePos.x,-0.95,0.95);
+    mousePos.y=clamp(mousePos.y,-0.95,0.95);
+  }
+
+  // ═══════════════════════════════════════════
+  // SHOOTING / RISK EVENTS
+  // ═══════════════════════════════════════════
+  function triggerFeedback(kind){
+    speedLineTimer=Math.max(speedLineTimer,0.35);
+    wingTrailBoost=Math.max(wingTrailBoost,0.45);
+    if(kind==="near"||kind==="hit") screenShakeTimer=Math.max(screenShakeTimer,0.24);
+    if(kind==="bulletTime") screenShakeTimer=Math.max(screenShakeTimer,0.18);
+  }
+  function fireBullet(){
+    if(gameMode!=="playing"||gameOver||shootCooldown>0) return false;
+    var bullet=null;
+    for(var i=0;i<bullets.length;i++){ if(!bullets[i].active){ bullet=bullets[i]; break; } }
+    if(!bullet) return false;
+    var p=airplane.mesh.position;
+    bullet.active=true; bullet.life=1.35; bullet.mesh.visible=true;
+    bullet.mesh.position.set(p.x+20,p.y,p.z-42);
+    bullet.mesh.rotation.set(0,0,0);
+    shootCooldown=shootCooldownMax;
+    triggerFeedback("shoot");
+    soundManager.playShoot();
+    return true;
+  }
+  function deactivateBullet(bullet){
+    bullet.active=false; bullet.life=0; bullet.mesh.visible=false; bullet.mesh.position.y=-2000;
+  }
+  function handleShotHit(target,type,bullet){
+    deactivateBullet(bullet);
+    var pts=(type==="asteroid"?45:30)*scoreMultiplier;
+    score+=pts;
+    spawnScorePopup("+"+pts,target.mesh.position.x,target.mesh.position.y,"boost");
+    triggerFeedback("hit");
+    soundManager.playBoost();
+    if(type==="asteroid"){
+      target.active=false; target.mesh.visible=false;
+    } else {
+      spawnObstacle(target,false);
+    }
+  }
+  function updateBullets(dt){
+    var gameSpeed=getGameSpeed();
+    for(var i=0;i<bullets.length;i++){
+      var bullet=bullets[i]; if(!bullet.active) continue;
+      bullet.life-=dt; bullet.mesh.position.z-=36+gameSpeed*22; bullet.mesh.rotation.z+=0.35;
+      if(bullet.life<=0||bullet.mesh.position.z<-3600){ deactivateBullet(bullet); continue; }
+      for(var o=0;o<obstacles.length;o++){
+        var obs=obstacles[o];
+        var dx=bullet.mesh.position.x-obs.mesh.position.x, dy=bullet.mesh.position.y-obs.mesh.position.y, dz=bullet.mesh.position.z-obs.mesh.position.z;
+        if(dx*dx+dy*dy+dz*dz<38*38){ handleShotHit(obs,"obstacle",bullet); break; }
+      }
+      if(!bullet.active) continue;
+      for(var a=0;a<asteroids.length;a++){
+        var ast=asteroids[a]; if(!ast.active) continue;
+        var adx=bullet.mesh.position.x-ast.mesh.position.x, ady=bullet.mesh.position.y-ast.mesh.position.y, adz=bullet.mesh.position.z-ast.mesh.position.z;
+        if(adx*adx+ady*ady+adz*adz<48*48){ handleShotHit(ast,"asteroid",bullet); break; }
+      }
+    }
+  }
+  function awardNearMiss(entity){
+    if(entity.nearMissed) return;
+    entity.nearMissed=true; nearMissCount++;
+    var pts=18*scoreMultiplier;
+    score+=pts; comboTimer=Math.max(comboTimer,1.4);
+    spawnScorePopup(t("nearMiss")+" +"+pts,airplane.mesh.position.x,airplane.mesh.position.y+34,"combo");
+    triggerFeedback("near");
+    soundManager.playNearMiss();
+  }
+  function maybeTriggerFinalLifeBulletTime(){
+    if(bulletTimeTriggered||settings.immortalMode) return;
+    if(lives===1){
+      bulletTimeTriggered=true; bulletTimeTimer=3.2; triggerFeedback("bulletTime"); soundManager.playBulletTime();
+      spawnScorePopup(t("bulletTime"),airplane.mesh.position.x,airplane.mesh.position.y+50,"slow");
+    }
+  }
+  function checkComboMilestones(){
+    [25,50,100].forEach(function(n){
+      if(comboCount>=n&&!comboMilestonesHit[n]){
+        comboMilestonesHit[n]=true;
+        spawnScorePopup("COMBO "+n+"!",airplane.mesh.position.x,airplane.mesh.position.y+58,"combo");
+        triggerFeedback("near");
+        soundManager.playAchievement();
+      }
+    });
+  }
+  function spawnAsteroidWave(){
+    asteroidWaveActive=2.8; asteroidWaveTimer=8.5;
+    var spawned=0;
+    for(var i=0;i<asteroids.length;i++){
+      if(!asteroids[i].active){ spawnAsteroid(asteroids[i],spawned); spawned++; }
+      if(spawned>=4) break;
+    }
+    if(spawned>0){ spawnScorePopup(t("asteroidWave"),0,210,"boost"); triggerFeedback("near"); }
+  }
+  function updateAsteroids(dt){
+    if(currentStage===5&&asteroidWaveTimer<=0) spawnAsteroidWave();
+    asteroidWaveActive=Math.max(0,asteroidWaveActive-dt);
+    var gameSpeed=getGameSpeed(), p=airplane.mesh.position, now=gameNow(), motionScale=getMotionScale();
+    for(var i=0;i<asteroids.length;i++){
+      var ast=asteroids[i]; if(!ast.active) continue;
+      ast.mesh.position.z+=gameSpeed*15;
+      ast.mesh.rotation.x+=0.024*motionScale; ast.mesh.rotation.y+=0.018*motionScale;
+      ast.mesh.position.x+=Math.sin(now*0.002+i)*0.18*motionScale;
+      if(ast.mesh.position.z>190){ ast.active=false; ast.mesh.visible=false; continue; }
+      var dx=p.x-ast.mesh.position.x, dy=p.y-ast.mesh.position.y, dz=p.z-ast.mesh.position.z, d2=dx*dx+dy*dy+dz*dz;
+      if(d2<90*90&&d2>42*42&&ast.mesh.position.z>-360&&ast.mesh.position.z<80) awardNearMiss(ast);
+      if(d2<38*38&&hitTimer<=0){
+        if(activeEffects.starPower>0){ score+=35*scoreMultiplier; ast.active=false; ast.mesh.visible=false; continue; }
+        if(activeEffects.shield>0){ activeEffects.shield=0; hitTimer=0.65; ast.active=false; ast.mesh.visible=false; soundManager.playShieldBreak(); continue; }
+        if(!settings.immortalMode){
+          lives--; comboCount=0; comboTimer=0; hitTimer=0.45; soundManager.playObstacle(); ast.active=false; ast.mesh.visible=false; maybeTriggerFinalLifeBulletTime();
+          if(lives<=0){ lives=0; if(score>=REVIVE_COST) showReviveScreen(); else showEndScreen(t("gameOverTitle"),t("gameOverText")); }
+        }
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // MAIN LOOP
+  // ═══════════════════════════════════════════
+  function stepFrame(dt){
+    if(!renderer||!scene||!camera) return;
+    var frameScale=clamp(dt*60,0.2,2.5);
+    gameClock+=dt; frameCounter++;
+    if(gameMode==="playing"&&!gameOver){
+      var q=getQualityConfig(); var motionScale=getMotionScale();
+      runTime+=dt; distance+=getGameSpeed()*110*dt;
+      applyKeyboardControls(); updateEffectTimers(dt); updateStageProgression();
+      if(SHOW_GROUND_PLANET&&land) land.mesh.rotation.z+=0.001*frameScale*motionScale;
+      orbit.mesh.rotation.z+=0.001*frameScale*motionScale;
+      sky.mesh.rotation.z+=0.0006*frameScale*motionScale;
+      if(SHOW_GROUND_PLANET&&forest) forest.mesh.rotation.z+=0.001*frameScale*motionScale;
+      if(SHOW_GROUND_PLANET&&cityWorld) cityWorld.rotation.z+=0.001*frameScale*motionScale;
+      if(stars){
+        stars.mesh.rotation.z+=0.00014*frameScale*motionScale;
+        // Twinkle big stars by size-pulsing via opacity variation per layer
+        if(currentStage>=4&&stars.points&&stars.points.material.opacity>0.5){
+          stars.points.material.size=8+3*Math.sin(gameClock*2.1+0.7);
+          if(stars.heroPoints) stars.heroPoints.material.size=18+8*Math.sin(gameClock*1.4);
+        }
+      }
+      tickMissions(dt);
+      updatePlane(); updateBullets(dt); updateCollectibles(); updatePowerups(); updateObstacles(); updateAsteroids(dt); updateBoss(dt); updateWeather();
+      if(SHOW_GROUND_PLANET&&frameCounter%q.forestUpdateInterval===0) updateForest();
+      if(frameCounter%q.cityUpdateInterval===0) updateCities();
+    }
+    updateBackgroundAndLighting();
+    if(hitTimer>0){
+      hitTimer=Math.max(0,hitTimer-dt);
+      flashEl.style.opacity=String(Math.max(0,hitTimer*1.8));
+    } else { flashEl.style.opacity="0"; }
+    document.body.classList.toggle("shake",screenShakeTimer>0);
+    speedLinesEl.classList.toggle("show",speedLineTimer>0);
+    bulletTimeTintEl.classList.toggle("show",bulletTimeTimer>0);
+    if(shootTouchBtn) shootTouchBtn.classList.toggle("cooling",shootCooldown>0);
+    updateHUD();
+    renderer.render(scene,camera);
+  }
+  function loop(timestamp){
+    var dt=lastFrameTime?Math.min(0.05,(timestamp-lastFrameTime)/1000):1/60;
+    lastFrameTime=timestamp;
+    stepFrame(dt);
+    requestAnimationFrame(loop);
+  }
+
+  // ═══════════════════════════════════════════
+  // INIT
+  // ═══════════════════════════════════════════
+  function bindTouchButton(button){
+    var key=button.getAttribute("data-key");
+    var start=function(e){ e.preventDefault(); if(key==="shoot"){ fireBullet(); return; } keys[key]=true; };
+    var end=function(e){ e.preventDefault(); keys[key]=false; };
+    button.addEventListener("pointerdown",start);
+    button.addEventListener("pointerup",end);
+    button.addEventListener("pointercancel",end);
+    button.addEventListener("pointerleave",end);
+  }
+  function setupEvents(){
+    document.addEventListener("mousemove",handlePointerMove,false);
+    document.addEventListener("touchmove",handlePointerMove,{passive:false});
+    document.addEventListener("pointermove",handlePointerMove,false);
+    window.addEventListener("keydown",handleKeyDown,false);
+    window.addEventListener("keyup",handleKeyUp,false);
+    startBtn.addEventListener("click",startGame);
+    leaderboardBtn.addEventListener("click",showLeaderboardPanel);
+    shopBtn.addEventListener("click",showShopPanel);
+    settingsBtn.addEventListener("click",showSettingsPanel);
+    resumeBtn.addEventListener("click",resumeGame);
+    restartBtn.addEventListener("click",restartGame);
+    menuBtn.addEventListener("click",showMainMenu);
+    reviveBtn.addEventListener("click",doRevive);
+    pauseBtn.addEventListener("click",togglePause);
+    fullscreenBtn.addEventListener("click",toggleFullscreen);
+    muteBtn.addEventListener("click",function(){ soundManager.setMuted(settings.sound!==false); });
+    reloadBtn.addEventListener("click",function(){ window.location.reload(); });
+    languageSelect.addEventListener("change",function(){ settings.language=languageSelect.value; saveSettings(); applyLocalization(); });
+    playerNameInput.addEventListener("input",function(){ settings.playerName=playerNameInput.value.trim()||"Pilot"; saveSettings(); });
+    graphicsSelect.addEventListener("change",function(){ settings.graphics=graphicsSelect.value; saveSettings(); applyGraphicsSettings(); });
+    controlSelect.addEventListener("change",function(){ settings.controls=controlSelect.value; saveSettings(); });
+    soundToggle.addEventListener("change",function(){ soundManager.setMuted(!soundToggle.checked); });
+    motionToggle.addEventListener("change",function(){ settings.reducedMotion=motionToggle.checked; saveSettings(); });
+    immortalToggle.addEventListener("change",function(){ settings.immortalMode=immortalToggle.checked; saveSettings(); updateHUD(); });
+    document.querySelectorAll(".touch-btn").forEach(bindTouchButton);
+  }
+  function showThreeError(){
+    threeErrorEl.classList.add("show");
+    threeErrorTextEl.textContent=t("threeError");
+    reloadBtn.onclick=function(){ window.location.reload(); };
+  }
+  function init(){
+    applyLocalization();
+    if(window.__threeLoadFailed||!window.THREE){ showThreeError(); return; }
+    createScene(); createLights(); createPlane();
+    orbit=new Orbit(); orbit.mesh.position.y=offSet; orbit.mesh.rotation.z=-Math.PI/6; scene.add(orbit.mesh);
+    createSun();
+    stars=new Stars(); scene.add(stars.mesh);
+    solarSystem=new SolarSystem(); scene.add(solarSystem.mesh);
+    createLand(); createForest(); createCities(); createSky(); createWeather(); createGameObjects();
+    setupEvents(); resetGame(false); showMainMenu(); applyGraphicsSettings(); applyLocalization();
+    fetchGlobalLeaderboard();
+    // Debug API
+    window.__skyRunnerDebug={
+      start:startGame, pause:pauseGame, resume:resumeGame,
+      reset:function(){ resetGame(false); showMainMenu(); },
+      setScore:function(v){ score=Math.max(0,Number(v)||0); updateStageProgression(); updateHUD(); },
+      fire:fireBullet,
+      forceCombo:function(v){ comboCount=Math.max(0,Number(v)||0); comboTimer=2.4; checkComboMilestones(); updateHUD(); },
+      forceFinalLife:function(){ lives=1; maybeTriggerFinalLifeBulletTime(); updateHUD(); },
+      forceObstacleAhead:function(){ if(obstacles[0]){ obstacles[0].mesh.position.set(airplane.mesh.position.x+18,airplane.mesh.position.y,-430); obstacles[0].nearMissed=false; } },
+      forceAsteroidWave:function(){ currentStage=5; spawnAsteroidWave(); updateHUD(); },
+      giveCoins:function(v){ totalCoins=clamp(totalCoins+(Number(v)||0),0,SCORE_LIMITS.coins); saveCoins(); renderShop(); updateHUD(); },
+      state:function(){ return{mode:gameMode,score,lives,currencyReward:runCoins+(runSaved?0:calculateScoreCurrencyReward(score)),totalCoins,combo:comboCount,stage:currentStage,stageName:formatStageName(currentStage),boss:bossEnemy?{health:Math.round(bossEnemy.health),max:bossEnemy.maxHealth}:null,bullets:bullets.filter(function(b){return b.active;}).length,asteroids:asteroids.filter(function(a){return a.active;}).length,nearMisses:nearMissCount,bulletTime:Number(bulletTimeTimer.toFixed(2)),speed:getGameSpeed().toFixed(2)}; }
+    };
+    window.render_game_to_text=function(){
+      return JSON.stringify({
+        coordinateSystem:"Three.js scene; x left/right, y vertical, z depth toward camera",
+        mode:gameMode, score:score, lives:lives, currencyReward:runCoins+(runSaved?0:calculateScoreCurrencyReward(score)), totalCoins:totalCoins,
+        combo:comboCount, stage:currentStage, stageName:formatStageName(currentStage),
+        player:{x:Number(airplane.mesh.position.x.toFixed(1)),y:Number(airplane.mesh.position.y.toFixed(1)),z:Number(airplane.mesh.position.z.toFixed(1))},
+        rings:rings.slice(0,5).map(function(r){ return{x:Math.round(r.mesh.position.x),y:Math.round(r.mesh.position.y),z:Math.round(r.mesh.position.z)}; }),
+        visibleCoins:coins.slice(0,5).map(function(c){ return{x:Math.round(c.mesh.position.x),y:Math.round(c.mesh.position.y),z:Math.round(c.mesh.position.z)}; }),
+        obstacles:obstacles.slice(0,5).map(function(o){ return{x:Math.round(o.mesh.position.x),y:Math.round(o.mesh.position.y),z:Math.round(o.mesh.position.z),type:o.type}; }),
+        bullets:bullets.filter(function(b){ return b.active; }).slice(0,6).map(function(b){ return{x:Math.round(b.mesh.position.x),y:Math.round(b.mesh.position.y),z:Math.round(b.mesh.position.z),life:Number(b.life.toFixed(2))}; }),
+        bulletCooldown:Number(shootCooldown.toFixed(2)),
+        nearMisses:nearMissCount,
+        bulletTime:Number(bulletTimeTimer.toFixed(2)),
+        asteroidWaveActive:Number(asteroidWaveActive.toFixed(2)),
+        asteroids:asteroids.filter(function(a){ return a.active; }).slice(0,6).map(function(a){ return{x:Math.round(a.mesh.position.x),y:Math.round(a.mesh.position.y),z:Math.round(a.mesh.position.z),nearMissed:a.nearMissed}; }),
+        powerups:powerups.slice(0,4).map(function(p){ return{x:Math.round(p.mesh.position.x),y:Math.round(p.mesh.position.y),z:Math.round(p.mesh.position.z),type:p.type}; }),
+        boss:bossEnemy?{stage:bossEnemy.stage,health:Math.round(bossEnemy.health),max:bossEnemy.maxHealth,x:Math.round(bossEnemy.mesh.position.x),y:Math.round(bossEnemy.mesh.position.y),z:Math.round(bossEnemy.mesh.position.z)}:null,
+        missions:activeMissions.map(function(m){ return{type:m.type,progress:Number(m.progress.toFixed(1)),target:m.target,done:m.done}; })
+      });
+    };
+    window.advanceTime=function(ms){
+      var steps=Math.max(1,Math.round((ms||16)/(1000/60)));
+      for(var i=0;i<steps;i++) stepFrame(1/60);
+      return window.render_game_to_text();
+    };
+    loop();
+  }
+  window.addEventListener("load",init,false);
+  </script>
+</body>
+</html>
